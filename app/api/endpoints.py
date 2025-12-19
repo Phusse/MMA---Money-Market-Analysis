@@ -1,13 +1,13 @@
 """
 API Endpoints for Daily AI Stock Intelligence System
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header, Depends
 from datetime import datetime
 from app.services.market_data import MarketDataService
 from app.services.llm_analyst import LLMService
 from app.services.notifier import NotificationService
 from app.services.nigerian_market import NigerianMarketService
-from app.services.news_service import NewsService
+from app.services.news_service import news_service
 from app.services.forex_service import ForexService, ForexSnapshot
 from app.services.signal_service import SignalTrackingService, SignalHistory
 from app.services.advanced_analysis import (
@@ -15,8 +15,9 @@ from app.services.advanced_analysis import (
     MultiTimeframeAnalysis, SupportResistance, EconomicCalendar, BacktestResult
 )
 from app.services.stock_analysis import stock_analysis_service
+from app.services.auth_service import auth_service, UserCreate, UserLogin, UserPreferences
 from app.models.schemas import FullReport, MarketSnapshot, AIAnalysis, NigerianMarketSnapshot, NewsArticle
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 
 router = APIRouter(prefix="/api", tags=["Stock Intelligence"])
@@ -60,7 +61,7 @@ market_service = MarketDataService()
 llm_service = LLMService()
 notification_service = NotificationService()
 nigerian_service = NigerianMarketService()
-news_service = NewsService()
+# news_service is imported directly from news_service.py
 forex_service = ForexService()
 signal_service = SignalTrackingService()
 
@@ -148,16 +149,20 @@ async def get_nigerian_market():
 
 
 @router.get("/news", response_model=NewsResponse)
-async def get_news(limit: int = 20, category: str = None):
+async def get_news(limit: int = 30, category: str = None, refresh: bool = False):
     """
-    Fetch latest market news with AI analysis.
+    Fetch latest market news with AI sentiment analysis and impact ratings.
     
     Args:
-        limit: Maximum number of articles to return (default: 20)
-        category: Filter by category (us_market, ngx_market, crypto, general)
+        limit: Maximum number of articles to return (default: 30)
+        category: Filter by category (us_market, ngx_market, forex, crypto)
+        refresh: Force refresh from sources (bypass cache)
+    
+    Returns news from: CryptoCompare API (crypto), Finnhub (if configured), 
+    and curated market intelligence for Forex, US, and Nigeria markets.
     """
     try:
-        news = news_service.get_market_news(limit=limit)
+        news = news_service.get_market_news(limit=limit, force_refresh=refresh)
         
         # Filter by category if specified
         if category:
@@ -291,82 +296,6 @@ async def get_signal_performance():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.post("/telegram/test")
-async def test_telegram():
-    """
-    Send a test message to Telegram to verify bot configuration.
-    """
-    test_signal = {
-        'symbol': 'TEST/USD',
-        'pair_name': 'Test Signal',
-        'signal': 'Strong Buy',
-        'price_at_signal': 1.2345,
-        'rsi': 30.5,
-        'macd_trend': 'Bullish'
-    }
-    
-    success = signal_service.send_telegram_alert(test_signal)
-    
-    if success:
-        return {"success": True, "message": "Test message sent to Telegram!"}
-    else:
-        return {"success": False, "message": "Telegram not configured or send failed. Check TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env"}
-
-
-class TradeTakenRequest(BaseModel):
-    symbol: str
-    pair_name: str = ""
-    signal: str
-    price: float
-
-
-@router.post("/telegram/trade-taken")
-async def trade_taken_alert(request: TradeTakenRequest):
-    """
-    Send a Telegram alert confirming user took a trade.
-    Called when user clicks "I Took The Trade" button.
-    """
-    import requests
-    import os
-    
-    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-    TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
-    
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        return {"success": False, "message": "Telegram not configured"}
-    
-    # Format trade confirmation message
-    emoji = "🟢" if "Buy" in request.signal else "🔴"
-    message = f"""
-✅ **TRADE TAKEN CONFIRMATION**
-━━━━━━━━━━━━━━━━━━━━━
-
-{emoji} **{request.signal.upper()}**
-
-📊 Symbol: `{request.symbol}`
-{f"📝 Pair: {request.pair_name}" if request.pair_name else ""}
-💰 Entry Price: `{request.price}`
-⏰ Time: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`
-
-━━━━━━━━━━━━━━━━━━━━━
-🎯 Good luck with your trade!
-"""
-    
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        response = requests.post(url, json={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": "Markdown"
-        })
-        
-        if response.status_code == 200:
-            return {"success": True, "message": "Trade confirmation sent to Telegram!"}
-        else:
-            return {"success": False, "message": f"Failed to send: {response.text}"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
 
 
 # ==============================================
@@ -596,5 +525,938 @@ async def get_full_stock_analysis(symbol: str):
         }
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# FOREX ENDPOINTS
+# ============================================
+@router.get("/forex/analyze")
+async def analyze_forex():
+    """Get forex market analysis with technical indicators"""
+    try:
+        snapshot = forex_service.get_forex_snapshot()
+        return {
+            "success": True,
+            "data": snapshot
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/forex/chart/{symbol}")
+async def forex_chart_data(symbol: str, period: str = "3mo"):
+    """Get historical chart data for a forex pair with MACD, RSI, and Fibonacci"""
+    try:
+        # Convert symbol format (EUR-USD to EUR/USD)
+        clean_symbol = symbol.replace("-", "/")
+        result = forex_service.get_historical_data(clean_symbol, period)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"Unable to get chart data for {symbol}")
+        return {"success": True, "data": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/forex/mtf/{symbol}")
+async def forex_multi_timeframe(symbol: str):
+    """Get multi-timeframe analysis for a forex pair"""
+    try:
+        clean_symbol = symbol.replace("-", "/")
+        result = mtf_service.analyze_pair(clean_symbol)
+        # Format for frontend
+        signals = {}
+        for sig in result.signals:
+            key = sig.timeframe.lower().replace("h", "h")
+            if sig.timeframe == "Daily":
+                key = "1d"
+            elif sig.timeframe == "1H":
+                key = "1h"
+            elif sig.timeframe == "4H":
+                key = "4h"
+            signals[key] = {
+                "signal": sig.signal,
+                "strength": sig.signal_strength,
+                "rsi": sig.rsi,
+                "macd_trend": sig.macd_trend
+            }
+        return {
+            "success": True, 
+            "data": signals
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/forex/sr/{symbol}")
+async def forex_support_resistance(symbol: str):
+    """Get support/resistance levels for a forex pair"""
+    try:
+        clean_symbol = symbol.replace("-", "/")
+        result = sr_service.calculate_levels(clean_symbol)
+        return {
+            "success": True, 
+            "data": {
+                "s2": result.support_2,
+                "s1": result.support_1,
+                "pivot": result.pivot_point,
+                "r1": result.resistance_1,
+                "r2": result.resistance_2,
+                "current_price": result.current_price,
+                "position": result.price_position,
+                "caution": result.caution
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/forex/backtest/{symbol}")
+async def forex_backtest(symbol: str, period: str = "2y"):
+    """Backtest trading signals on a forex pair"""
+    try:
+        clean_symbol = symbol.replace("-", "/")
+        result = backtest_service.backtest_symbol(clean_symbol, period)
+        return {
+            "success": True, 
+            "data": {
+                "win_rate": result.win_rate / 100,  # Convert to decimal for frontend
+                "total_trades": result.total_signals,
+                "profit_factor": result.profit_factor,
+                "max_drawdown": result.max_drawdown_pct / 100,
+                "wins": result.wins,
+                "losses": result.losses
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/forex/calendar")
+async def economic_calendar():
+    """Get upcoming economic events"""
+    try:
+        calendar = calendar_service.get_calendar()
+        # Format events for frontend
+        events = []
+        for e in calendar.events:
+            events.append({
+                "date": e.time,
+                "name": e.event,
+                "currency": e.currency,
+                "impact": e.impact,
+                "forecast": e.forecast,
+                "previous": e.previous
+            })
+        return {
+            "success": True, 
+            "data": {
+                "events": events,
+                "high_impact_today": calendar.high_impact_today,
+                "warning": calendar.warning
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/forex/strength")
+async def get_currency_strength():
+    """
+    Get currency strength analysis based on cross-pair performance.
+    
+    Returns relative strength of major currencies (USD, EUR, GBP, JPY, etc.)
+    to identify strongest and weakest currencies for optimal pair selection.
+    """
+    try:
+        from app.services.currency_strength import currency_strength_service
+        
+        # Get forex data first
+        forex_data = forex_service.get_forex_snapshot()
+        
+        # Build change dict from pairs
+        pair_changes = {}
+        for pair in forex_data.pairs:
+            pair_changes[pair.symbol] = pair.change_pct
+        
+        # Calculate strength
+        strengths = currency_strength_service.calculate_strength(pair_changes)
+        
+        # Get best trading opportunities
+        opportunities = currency_strength_service.get_strongest_pairs(strengths)
+        
+        # Generate summary
+        summary = currency_strength_service.get_strength_summary(strengths)
+        
+        return {
+            "success": True,
+            "data": {
+                "currencies": [
+                    {
+                        "currency": s.currency,
+                        "name": s.name,
+                        "flag": s.flag,
+                        "score": s.score,
+                        "change_1h": s.change_1h,
+                        "change_24h": s.change_24h,
+                        "trend": s.trend,
+                        "rank": s.rank
+                    }
+                    for s in strengths
+                ],
+                "opportunities": [
+                    {"pair": p, "action": a, "reason": r}
+                    for p, a, r in opportunities
+                ],
+                "summary": summary,
+                "last_updated": datetime.now().isoformat()
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/forex/sessions")
+async def get_forex_sessions():
+    """
+    Get current forex trading session status.
+    
+    Returns status (open/closed) for Sydney, Tokyo, London, and New York sessions
+    with optimal trading windows highlighted.
+    """
+    try:
+        from datetime import datetime, timezone
+        
+        now_utc = datetime.now(timezone.utc)
+        hour = now_utc.hour
+        
+        # Forex session times (approximate, in UTC)
+        sessions = {
+            "sydney": {
+                "name": "Sydney",
+                "flag": "🇦🇺",
+                "open_hour": 22,  # 10 PM UTC
+                "close_hour": 7,  # 7 AM UTC
+                "crosses_midnight": True,
+                "volatility": "Low"
+            },
+            "tokyo": {
+                "name": "Tokyo",
+                "flag": "🇯🇵",
+                "open_hour": 0,  # 12 AM UTC
+                "close_hour": 9,  # 9 AM UTC
+                "crosses_midnight": False,
+                "volatility": "Low-Medium"
+            },
+            "london": {
+                "name": "London",
+                "flag": "🇬🇧",
+                "open_hour": 8,  # 8 AM UTC
+                "close_hour": 17,  # 5 PM UTC
+                "crosses_midnight": False,
+                "volatility": "High"
+            },
+            "newyork": {
+                "name": "New York",
+                "flag": "🇺🇸",
+                "open_hour": 13,  # 1 PM UTC
+                "close_hour": 22,  # 10 PM UTC
+                "crosses_midnight": False,
+                "volatility": "High"
+            }
+        }
+        
+        result = {}
+        active_sessions = []
+        
+        for key, session in sessions.items():
+            if session["crosses_midnight"]:
+                is_open = hour >= session["open_hour"] or hour < session["close_hour"]
+            else:
+                is_open = session["open_hour"] <= hour < session["close_hour"]
+            
+            result[key] = {
+                "name": session["name"],
+                "flag": session["flag"],
+                "status": "open" if is_open else "closed",
+                "volatility": session["volatility"],
+                "hours": f"{session['open_hour']:02d}:00 - {session['close_hour']:02d}:00 UTC"
+            }
+            
+            if is_open:
+                active_sessions.append(session["name"])
+        
+        # Determine overlap periods (highest volatility)
+        overlap = None
+        if "London" in active_sessions and "New York" in active_sessions:
+            overlap = "London-New York Overlap (High Volatility)"
+        elif "Tokyo" in active_sessions and "London" in active_sessions:
+            overlap = "Tokyo-London Overlap (Medium Volatility)"
+        elif "Sydney" in active_sessions and "Tokyo" in active_sessions:
+            overlap = "Sydney-Tokyo Overlap (Low Volatility)"
+        
+        return {
+            "success": True,
+            "data": {
+                "sessions": result,
+                "active_count": len(active_sessions),
+                "active_sessions": active_sessions,
+                "overlap": overlap,
+                "current_time_utc": now_utc.strftime("%H:%M UTC"),
+                "best_pairs": {
+                    "sydney": ["AUD/USD", "NZD/USD", "AUD/JPY"],
+                    "tokyo": ["USD/JPY", "EUR/JPY", "GBP/JPY"],
+                    "london": ["EUR/USD", "GBP/USD", "EUR/GBP"],
+                    "newyork": ["EUR/USD", "USD/CAD", "USD/CHF"]
+                }
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# SIGNALS ENDPOINTS  
+# ============================================
+@router.get("/signals/history")
+async def get_signals_history():
+    """Get signal tracking history and performance stats"""
+    try:
+        history = signal_service.get_signal_history()
+        # Convert to simpler format for frontend
+        return {
+            "success": True,
+            "data": {
+                "history": [
+                    {
+                        "date": s.timestamp[:10] if s.timestamp else "",
+                        "symbol": s.symbol,
+                        "action": "BUY" if "Buy" in s.signal else "SELL",
+                        "entry_price": s.price_at_signal,
+                        "exit_price": s.current_price,
+                        "profit_loss": s.pnl_pct or 0,
+                        "status": s.outcome or "OPEN"
+                    }
+                    for s in history.signals
+                ],
+                "win_rate": (history.performance.win_rate or 0) / 100 if history.performance else 0,
+                "total_signals": history.total_signals,
+                "profitable": history.performance.wins if history.performance else 0,
+                "avg_return": history.performance.total_pnl_pct / max(history.total_signals, 1) if history.performance else 0
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# ============================================
+# TELEGRAM ENDPOINT
+# ============================================
+@router.post("/telegram/test")
+async def test_telegram():
+    """Send a test message to Telegram"""
+    try:
+        success = notification_service.send_telegram("🧪 Test message from MMA - Your alerts are working!")
+        return {
+            "success": success,
+            "message": "Test message sent!" if success else "Failed to send"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class TradeTakenRequest(BaseModel):
+    symbol: str
+    signal: str
+    price: float
+
+
+@router.post("/telegram/trade-taken")
+async def trade_taken_alert(request: TradeTakenRequest):
+    """Send Telegram notification when user takes a trade"""
+    try:
+        emoji = "🟢" if "Buy" in request.signal else "🔴"
+        
+        # Calculate SL/TP
+        is_buy = "Buy" in request.signal
+        sl_pct = 2.5 if "Strong" in request.signal else 2.0
+        tp_pct = 5.0 if "Strong" in request.signal else 4.0
+        
+        if is_buy:
+            sl = request.price * (1 - sl_pct/100)
+            tp = request.price * (1 + tp_pct/100)
+        else:
+            sl = request.price * (1 + sl_pct/100)
+            tp = request.price * (1 - tp_pct/100)
+        
+        from datetime import datetime
+        message = f"""
+{emoji} *TRADE TAKEN: {request.signal.upper()}*
+
+📊 *{request.symbol}*
+
+💰 Entry: `{request.price}`
+🛑 Stop Loss: `{sl:.5f}` (-{sl_pct}%)
+🎯 Take Profit: `{tp:.5f}` (+{tp_pct}%)
+
+⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+_Good luck! Remember to stick to your stop loss!_ 🍀
+        """
+        
+        success = notification_service.send_telegram(message)
+        return {
+            "success": success,
+            "message": "Trade alert sent to Telegram!" if success else "Telegram not configured"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# SIGNAL ENDPOINTS
+# ============================================
+
+class SignalRecordRequest(BaseModel):
+    symbol: str
+    pair_name: str
+    category: str
+    signal: str
+    signal_strength: int
+    price: float
+    rsi: Optional[float] = None
+    macd_trend: Optional[str] = None
+    analysis: Optional[str] = None
+
+@router.post("/signals/record")
+async def record_signal(request: SignalRecordRequest):
+    """Record a new trading signal"""
+    try:
+        from app.services.signal_service import signal_service
+        signal = signal_service.record_signal(
+            symbol=request.symbol,
+            pair_name=request.pair_name,
+            category=request.category,
+            signal=request.signal,
+            signal_strength=request.signal_strength,
+            price=request.price,
+            rsi=request.rsi,
+            macd_trend=request.macd_trend,
+            analysis=request.analysis
+        )
+        return {
+            "success": True,
+            "signal_id": signal.id,
+            "message": "Signal recorded successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/forex/chart/{symbol:path}")
+async def get_forex_chart(symbol: str, period: str = "3mo"):
+    """Get historical data for charting"""
+    try:
+        clean_symbol = symbol.replace("-", "/")
+        data = forex_service.get_historical_data(clean_symbol, period)
+        
+        if not data:
+            raise HTTPException(status_code=404, detail=f"Chart data not found for {symbol}")
+            
+        # Transform parallel arrays to list of objects for frontend
+        history = [{"date": d, "close": p} for d, p in zip(data['dates'], data['prices'])]
+        
+        return {
+            "success": True, 
+            "data": history
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# AUTHENTICATION ENDPOINTS
+# ============================================
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: Optional[str] = None
+    account_type: str = "both"  # forex, stock, or both
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class PreferencesUpdate(BaseModel):
+    telegram_enabled: Optional[bool] = None
+    telegram_chat_id: Optional[str] = None
+    email_reports: Optional[bool] = None
+    report_frequency: Optional[str] = None
+    default_markets: Optional[List[str]] = None
+    risk_tolerance: Optional[str] = None
+    theme: Optional[str] = None
+    default_currency: Optional[str] = None
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    """Dependency to get current user from Authorization header"""
+    if not authorization:
+        return None
+    
+    try:
+        # Extract token from "Bearer <token>"
+        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        user = await auth_service.get_current_user(token)
+        return user
+    except Exception:
+        return None
+
+
+@router.get("/auth/status")
+async def auth_status():
+    """Check if authentication is configured"""
+    return {
+        "configured": auth_service.is_configured(),
+        "message": "Supabase authentication is ready" if auth_service.is_configured() else "Authentication not configured. Set SUPABASE_URL and SUPABASE_KEY in .env"
+    }
+
+
+@router.post("/auth/register")
+async def register(request: RegisterRequest):
+    """Register a new user account"""
+    if not auth_service.is_configured():
+        raise HTTPException(status_code=503, detail="Authentication not configured")
+    
+    user_data = UserCreate(
+        email=request.email,
+        password=request.password,
+        name=request.name,
+        account_type=request.account_type
+    )
+    
+    result = await auth_service.register(user_data)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Registration failed"))
+    
+    return result
+
+
+@router.post("/auth/login")
+async def login(request: LoginRequest):
+    """Login and get access token"""
+    if not auth_service.is_configured():
+        raise HTTPException(status_code=503, detail="Authentication not configured")
+    
+    credentials = UserLogin(
+        email=request.email,
+        password=request.password
+    )
+    
+    result = await auth_service.login(credentials)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=401, detail=result.get("error", "Login failed"))
+    
+    return result
+
+
+@router.post("/auth/logout")
+async def logout(authorization: Optional[str] = Header(None)):
+    """Logout current user"""
+    if not authorization:
+        return {"success": True, "message": "Already logged out"}
+    
+    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+    result = await auth_service.logout(token)
+    return result
+
+
+@router.get("/auth/me")
+async def get_me(user = Depends(get_current_user)):
+    """Get current logged-in user info"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return {
+        "success": True,
+        "user": user
+    }
+
+
+@router.post("/auth/refresh")
+async def refresh_token(refresh_token: str):
+    """Refresh access token"""
+    if not auth_service.is_configured():
+        raise HTTPException(status_code=503, detail="Authentication not configured")
+    
+    result = await auth_service.refresh_session(refresh_token)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    
+    return result
+
+
+@router.post("/auth/forgot-password")
+async def forgot_password(request: PasswordResetRequest):
+    """Send password reset email"""
+    if not auth_service.is_configured():
+        raise HTTPException(status_code=503, detail="Authentication not configured")
+    
+    result = await auth_service.reset_password_request(request.email)
+    return result
+
+
+@router.get("/user/preferences")
+async def get_preferences(user = Depends(get_current_user)):
+    """Get current user's preferences"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    prefs = await auth_service.get_user_preferences(user["id"])
+    
+    if not prefs:
+        # Return defaults if no preferences exist
+        prefs = {
+            "telegram_enabled": False,
+            "email_reports": True,
+            "report_frequency": "daily",
+            "default_markets": ["us_market", "forex"],
+            "risk_tolerance": "moderate",
+            "theme": "dark",
+            "default_currency": "USD"
+        }
+    
+    return {
+        "success": True,
+        "preferences": prefs
+    }
+
+
+@router.put("/user/preferences")
+async def update_preferences(
+    preferences: PreferencesUpdate,
+    user = Depends(get_current_user)
+):
+    """Update user preferences"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Convert to dict, excluding None values
+    update_data = {k: v for k, v in preferences.dict().items() if v is not None}
+    
+    if not update_data:
+        return {"success": True, "message": "No changes to save"}
+    
+    result = await auth_service.update_user_preferences(user["id"], update_data)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to save preferences"))
+    
+    return {
+        "success": True,
+        "message": "Preferences saved successfully"
+    }
+
+
+@router.get("/user/profile")
+async def get_profile(user = Depends(get_current_user)):
+    """Get user profile"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    profile = await auth_service.get_user_profile(user["id"])
+    
+    return {
+        "success": True,
+        "profile": profile or {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user.get("name"),
+            "plan": "free"
+        }
+    }
+
+
+@router.put("/user/profile")
+async def update_profile(
+    name: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Update user profile"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    update_data = {}
+    if name is not None:
+        update_data["name"] = name
+    
+    if not update_data:
+        return {"success": True, "message": "No changes to save"}
+    
+    result = await auth_service.update_user_profile(user["id"], update_data)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to update profile"))
+    
+    return {
+        "success": True,
+        "message": "Profile updated successfully"
+    }
+
+
+class UpdateAccountTypeRequest(BaseModel):
+    password: str
+    new_account_type: str  # forex, stock, or both
+
+
+@router.post("/user/account-type")
+async def update_account_type(
+    request: UpdateAccountTypeRequest,
+    user = Depends(get_current_user)
+):
+    """
+    Update user's account type with password verification.
+    Account types: forex, stock, or both
+    """
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Validate account type
+    if request.new_account_type not in ["forex", "stock", "both"]:
+        raise HTTPException(status_code=400, detail="Invalid account type. Must be 'forex', 'stock', or 'both'")
+    
+    # Verify password by attempting login
+    from app.services.auth_service import UserLogin
+    credentials = UserLogin(email=user["email"], password=request.password)
+    login_result = await auth_service.login(credentials)
+    
+    if not login_result.get("success"):
+        raise HTTPException(status_code=403, detail="Incorrect password")
+    
+    # Update account type in profile
+    result = await auth_service.update_user_profile(user["id"], {"account_type": request.new_account_type})
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail="Failed to update account type")
+    
+    return {
+        "success": True,
+        "message": f"Account type updated to '{request.new_account_type}'",
+        "account_type": request.new_account_type
+    }
+
+
+# ==============================================
+# QUANTITATIVE ANALYSIS ENDPOINTS
+# ==============================================
+
+@router.get("/quant/fibonacci/{symbol:path}")
+async def get_fibonacci_levels(symbol: str, period: str = "3mo"):
+    """
+    Get Fibonacci retracement and extension levels.
+    
+    Args:
+        symbol: Trading symbol (e.g., "EURUSD=X", "AAPL")
+        period: Lookback period ("1mo", "3mo", "6mo", "1y")
+    
+    Returns:
+        - Swing high/low detection
+        - All Fibonacci levels (0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%)
+        - Extension levels (127.2%, 161.8%, 200%, 261.8%)
+        - Current price position relative to levels
+        - Trading signal based on golden pocket
+    """
+    try:
+        from app.services.quant_analysis import fibonacci_service
+        result = fibonacci_service.calculate_levels(symbol, period)
+        return {
+            "success": True,
+            "data": result.dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quant/bollinger/{symbol:path}")
+async def get_bollinger_bands(symbol: str, period: int = 20, std_dev: float = 2.0):
+    """
+    Get Bollinger Bands analysis with squeeze detection.
+    
+    Args:
+        symbol: Trading symbol
+        period: SMA period (default: 20)
+        std_dev: Standard deviation multiplier (default: 2.0)
+    
+    Returns:
+        - Upper, Middle, Lower bands
+        - Bandwidth (volatility measure)
+        - %B indicator
+        - Squeeze detection (potential breakout signal)
+        - Trading signal and recommendation
+    """
+    try:
+        from app.services.quant_analysis import BollingerBandsService
+        bb_service = BollingerBandsService(period=period, std_dev=std_dev)
+        result = bb_service.calculate(symbol)
+        return {
+            "success": True,
+            "data": result.dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quant/mean-reversion/{symbol:path}")
+async def get_mean_reversion_analysis(symbol: str):
+    """
+    Get mean reversion trading signals.
+    
+    Uses z-score analysis to identify oversold/overbought conditions
+    and calculates half-life for mean reversion speed.
+    
+    Returns:
+        - Z-score from rolling mean
+        - Deviation from SMA20/SMA50
+        - Half-life (days for price to revert halfway to mean)
+        - RSI and divergence detection
+        - Reversion probability
+        - Trading signal with confidence level
+    """
+    try:
+        from app.services.quant_analysis import mean_reversion_service
+        result = mean_reversion_service.analyze(symbol)
+        return {
+            "success": True,
+            "data": result.dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quant/monte-carlo/{symbol:path}")
+async def get_monte_carlo_simulation(symbol: str, days: int = 30, simulations: int = 10000):
+    """
+    Run Monte Carlo simulation for price forecasting.
+    
+    Uses Geometric Brownian Motion (GBM) based on historical volatility.
+    
+    Args:
+        symbol: Trading symbol
+        days: Number of days to simulate forward (default: 30)
+        simulations: Number of simulation paths (default: 10,000)
+    
+    Returns:
+        - Price distribution statistics (mean, median, std dev)
+        - Percentile ranges (5th, 25th, 75th, 95th)
+        - Probability of gain vs loss
+        - Value at Risk (VaR) at 95% and 99%
+        - Sharpe ratio estimate
+        - Risk-reward ratio
+    """
+    try:
+        from app.services.quant_analysis import MonteCarloService
+        mc_service = MonteCarloService(num_simulations=simulations)
+        result = mc_service.simulate(symbol, days)
+        return {
+            "success": True,
+            "data": result.dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quant/full/{symbol:path}")
+async def get_full_quant_analysis(symbol: str):
+    """
+    Get complete quantitative analysis combining all methods.
+    
+    Runs Fibonacci, Bollinger Bands, Mean Reversion, and Monte Carlo
+    analysis and provides a weighted combined signal.
+    
+    Signal weights:
+    - Mean Reversion: 30% (best for ranging markets)
+    - Bollinger Bands: 25% (volatility-based)
+    - Monte Carlo: 25% (probabilistic)
+    - Fibonacci: 20% (support/resistance)
+    
+    Returns:
+        - All individual analyses
+        - Combined signal (STRONG_BUY to STRONG_SELL)
+        - Combined strength (1-10)
+        - Confidence level based on signal agreement
+    """
+    try:
+        from app.services.quant_analysis import quant_analysis_service
+        result = quant_analysis_service.full_analysis(symbol)
+        return {
+            "success": True,
+            "data": {
+                "symbol": result.symbol,
+                "timestamp": result.timestamp,
+                "fibonacci": result.fibonacci.dict(),
+                "bollinger": result.bollinger.dict(),
+                "mean_reversion": result.mean_reversion.dict(),
+                "monte_carlo": result.monte_carlo.dict(),
+                "combined_signal": result.combined_signal,
+                "combined_strength": result.combined_strength,
+                "confidence_level": result.confidence_level,
+                "recommendation": result.recommendation
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quant/summary/{symbol:path}")
+async def get_quant_summary(symbol: str):
+    """
+    Get a quick summary of quant analysis for display.
+    
+    Returns condensed version suitable for UI cards/widgets.
+    """
+    try:
+        from app.services.quant_analysis import quant_analysis_service
+        result = quant_analysis_service.full_analysis(symbol)
+        
+        return {
+            "success": True,
+            "data": {
+                "symbol": result.symbol,
+                "combined_signal": result.combined_signal,
+                "combined_strength": result.combined_strength,
+                "confidence": result.confidence_level,
+                
+                # Key metrics summary
+                "fibonacci_signal": result.fibonacci.signal,
+                "fibonacci_nearest": result.fibonacci.nearest_level,
+                
+                "bollinger_position": result.bollinger.position,
+                "bollinger_squeeze": result.bollinger.is_squeeze,
+                
+                "zscore": result.mean_reversion.zscore,
+                "reversion_prob": result.mean_reversion.reversion_probability,
+                
+                "monte_carlo_prob_gain": result.monte_carlo.prob_above_current,
+                "expected_return": result.monte_carlo.expected_return_pct,
+                "var_95": result.monte_carlo.var_95,
+                
+                "recommendation": result.recommendation
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

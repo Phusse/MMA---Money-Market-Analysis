@@ -335,16 +335,38 @@ class ForexService:
             
             for ticker, info in self.forex_pairs.items():
                 try:
-                    if hasattr(data.columns, 'levels'):
-                        if ticker not in data.columns.levels[0]:
+                    # Handle different DataFrame column formats from yfinance
+                    if isinstance(data.columns, pd.MultiIndex):
+                        # Check if ticker exists in either level of the MultiIndex
+                        has_ticker = False
+                        if hasattr(data.columns, 'levels'):
+                            for level in data.columns.levels:
+                                if ticker in level:
+                                    has_ticker = True
+                                    break
+                        
+                        if not has_ticker:
+                            logger.debug(f"Ticker {ticker} not found in data")
                             continue
-                        df = data[ticker]
+                        
+                        # Try to get data for this ticker
+                        try:
+                            # New yfinance format: columns are ('Price', 'Ticker')
+                            df = data.xs(ticker, axis=1, level='Ticker') if 'Ticker' in data.columns.names else data[ticker]
+                        except (KeyError, TypeError):
+                            try:
+                                # Old format: columns are ('Ticker', 'Price')  
+                                df = data[ticker]
+                            except KeyError:
+                                logger.debug(f"Could not extract data for {ticker}")
+                                continue
                     else:
                         df = data
                     
                     df = df.dropna()
                     
                     if df.empty or len(df) < 30:  # Need enough data for technicals
+                        logger.debug(f"Not enough data for {ticker}: {len(df)} rows")
                         continue
                     
                     close_col = 'Close' if 'Close' in df.columns else 'close'
@@ -504,7 +526,8 @@ class ForexService:
         
         Args:
             symbol: The forex pair symbol (e.g., "EUR/USD")
-            period: Time period - "1mo", "3mo", "6mo", "1y"
+            period: Time period - "1d", "5d", "1mo", "3mo", "6mo", "1y"
+                    For intraday: "1d" = 1 day (1-minute bars), "5d" = 5 days (5-minute bars)
             
         Returns:
             Dictionary with dates, prices, SMAs, RSI, MACD, Fibonacci levels
@@ -521,10 +544,24 @@ class ForexService:
             return None
         
         try:
-            logger.info(f"📊 Fetching historical data for {symbol} ({yahoo_ticker})")
+            logger.info(f"📊 Fetching historical data for {symbol} ({yahoo_ticker}) - period: {period}")
+            
+            # Determine interval based on period
+            # For intraday data, we need to specify interval
+            interval = "1d"  # Default daily
+            if period == "1h":
+                period = "1d"  # Yahoo uses period for how far back
+                interval = "1m"  # 1-minute bars for 1 hour (limited to 1 day period)
+            elif period == "1d":
+                interval = "5m"  # 5-minute bars for 1 day
+            elif period == "1wk":
+                period = "5d"  # Use 5 days for 1 week period
+                interval = "15m"  # 15-minute bars for 1 week
+            elif period == "1mo":
+                interval = "1h"  # Hourly for 1 month
             
             # Fetch data from Yahoo Finance
-            data = yf.download(yahoo_ticker, period=period, progress=False)
+            data = yf.download(yahoo_ticker, period=period, interval=interval, progress=False)
             
             if data.empty or len(data) < 20:
                 logger.warning(f"Insufficient data for {symbol}")
@@ -569,14 +606,27 @@ class ForexService:
                 'fib100': low_price
             }
             
-            # Prepare data for frontend (last 60 data points for cleaner charts)
-            data_points = min(60, len(close_prices))
+            # Prepare data for frontend
+            # More data points for intraday, less for daily/weekly
+            if interval in ['1m']:
+                data_points = min(60, len(close_prices))  # ~1 hour of 1-min bars
+                date_format = '%H:%M'  # Just time for intraday
+            elif interval in ['5m', '15m']:
+                data_points = min(100, len(close_prices))  # Good for day/week views
+                date_format = '%m/%d %H:%M'
+            elif interval == '1h':
+                data_points = min(80, len(close_prices))
+                date_format = '%m/%d %H:%M'
+            else:
+                data_points = min(60, len(close_prices))
+                date_format = '%Y-%m-%d'
             
             result = {
                 'symbol': symbol,
                 'period': period,
+                'interval': interval,
                 'data_points': data_points,
-                'dates': [d.strftime('%m/%d %H:%M') for d in close_prices.index[-data_points:]],
+                'dates': [d.strftime(date_format) for d in close_prices.index[-data_points:]],
                 'prices': [round(float(p), 5) for p in close_prices.values[-data_points:]],
                 'sma_20': [round(float(p), 5) if not pd.isna(p) else None for p in sma_20.values[-data_points:]],
                 'sma_50': [round(float(p), 5) if not pd.isna(p) else None for p in sma_50.values[-data_points:]],
@@ -591,13 +641,13 @@ class ForexService:
                 'fetched_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
-            logger.info(f"✅ Historical data fetched: {data_points} points for {symbol}")
+            logger.info(f"✅ Historical data fetched: {data_points} points for {symbol} ({interval} interval)")
             return result
             
         except Exception as e:
             logger.error(f"Error fetching historical data for {symbol}: {e}")
             return None
 
-
+ 
 # Singleton instance
 forex_service = ForexService()

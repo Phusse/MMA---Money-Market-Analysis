@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Market Intelligence | AI-Powered Professional Trading Insights</title>
+    <meta name="description"
+        content="Get real-time market analysis powered by AI. Professional trading signals, portfolio strategies, and market intelligence for US, Nigerian, and Forex markets.">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                        cursive: ['Satisfy', 'cursive'],
+                    },
+                    colors: {
+                        'surface-dark': '#0a0a0f',
+                        'surface-card': '#12121a',
+                        'surface-hover': '#1a1a25',
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out',
+                        'slide-up': 'slideUp 0.6s ease-out',
+                        'slide-down': 'slideDown 0.6s ease-out',
+                        'float': 'float 6s ease-in-out infinite',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'marquee': 'marquee 30s linear infinite',
+                        'marquee-reverse': 'marquee-reverse 25s linear infinite',
+                        'gradient': 'gradient 8s ease infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(30px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        },
+                        slideDown: {
+                            '0%': { opacity: '0', transform: 'translateY(-30px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-20px)' }
+                        },
+                        marquee: {
+                            '0%': { transform: 'translateX(0%)' },
+                            '100%': { transform: 'translateX(-50%)' }
+                        },
+                        'marquee-reverse': {
+                            '0%': { transform: 'translateX(-50%)' },
+                            '100%': { transform: 'translateX(0%)' }
+                        },
+                        gradient: {
+                            '0%, 100%': { backgroundPosition: '0% 50%' },
+                            '50%': { backgroundPosition: '100% 50%' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@700;900&family=Satisfy&display=swap"
+        rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/images/logo.png">
+
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: #0a0a0f;
+            color: white;
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #06b6d4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .gradient-border {
+            background: linear-gradient(135deg, #a855f7, #6366f1, #06b6d4);
+            padding: 1px;
+            border-radius: 1rem;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .hero-gradient {
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(120, 119, 198, 0.15), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 50%, rgba(147, 51, 234, 0.1), transparent),
+                radial-gradient(ellipse 60% 40% at 20% 50%, rgba(59, 130, 246, 0.1), transparent);
+        }
+
+        .signal-toast {
+            animation: slideInToast 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes slideInToast {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .glow-purple {
+            box-shadow: 0 0 60px rgba(147, 51, 234, 0.3);
+        }
+
+        .glow-blue {
+            box-shadow: 0 0 60px rgba(59, 130, 246, 0.3);
+        }
+
+        .ticker-positive {
+            color: #10b981;
+        }
+
+        .ticker-negative {
+            color: #ef4444;
+        }
+
+        .marquee-container {
+            mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+            box-shadow: 0 10px 40px -10px rgba(124, 58, 237, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 50px -10px rgba(124, 58, 237, 0.6);
+        }
+
+        .feature-card {
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        @keyframes ticker-scroll {
+            0% {
+                transform: translateX(0);
+            }
+
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+
+        .ticker-scroll {
+            animation: ticker-scroll 40s linear infinite;
+        }
+
+        .gradient-text-animated {
+            background: linear-gradient(to right, #c084fc, #6366f1, #38bdf8, #c084fc);
+            background-size: 300% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradient-anim 4s ease infinite;
+        }
+
+        @keyframes gradient-anim {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <!-- Live Signal Toast Container -->
+    <div id="toast-container" class="fixed bottom-8 right-8 z-50 flex flex-col gap-4 pointer-events-none"></div>
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 glass">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <!-- Logo -->
+                <a href="/" class="flex items-center gap-3">
+                    <img src="/static/images/logo.png" alt="Logo" class="w-10 h-10 rounded-xl object-cover">
+                    <span class="text-3xl font-cursive font-bold text-white tracking-wide">Intelligence</span>
+                </a>
+
+                <!-- Nav Links -->
+                <div class="hidden md:flex items-center gap-8">
+                    <a href="#features" class="text-sm text-slate-400 hover:text-white transition-colors">Features</a>
+                    <a href="#markets" class="text-sm text-slate-400 hover:text-white transition-colors">Markets</a>
+                    <!-- <a href="#pricing" class="text-sm text-slate-400 hover:text-white transition-colors">Pricing</a> -->
+                    <a href="#testimonials"
+                        class="text-sm text-slate-400 hover:text-white transition-colors">Reviews</a>
+                </div>
+
+                <!-- Auth Buttons -->
+                <div class="flex items-center gap-3">
+                    <a href="/login"
+                        class="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors">Sign
+                        In</a>
+                    <a href="/signup"
+                        class="px-5 py-2.5 text-sm font-semibold bg-white text-gray-900 rounded-xl hover:bg-slate-100 transition-all">
+                        Get Started Free
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Live Stock Ticker -->
+    <div
+        class="fixed top-[72px] left-0 right-0 z-40 bg-surface-dark/80 backdrop-blur-lg border-b border-white/5 py-2 marquee-container">
+        <div class="ticker-scroll flex items-center gap-8 whitespace-nowrap">
+            <!-- Ticker items (duplicated for seamless loop) -->
+            <div class="flex items-center gap-8">
+                <span class="flex items-center gap-2"><strong>AAPL</strong> <span
+                        class="ticker-positive">+2.34%</span></span>
+                <span class="flex items-center gap-2"><strong>GOOGL</strong> <span
+                        class="ticker-positive">+1.87%</span></span>
+                <span class="flex items-center gap-2"><strong>MSFT</strong> <span
+                        class="ticker-negative">-0.54%</span></span>
+                <span class="flex items-center gap-2"><strong>AMZN</strong> <span
+                        class="ticker-positive">+3.21%</span></span>
+                <span class="flex items-center gap-2"><strong>TSLA</strong> <span
+                        class="ticker-positive">+4.56%</span></span>
+                <span class="flex items-center gap-2"><strong>NVDA</strong> <span
+                        class="ticker-positive">+5.12%</span></span>
+                <span class="flex items-center gap-2"><strong>META</strong> <span
+                        class="ticker-negative">-1.23%</span></span>
+                <span class="flex items-center gap-2"><strong>EUR/USD</strong> <span
+                        class="ticker-positive">+0.32%</span></span>
+                <span class="flex items-center gap-2"><strong>GBP/USD</strong> <span
+                        class="ticker-negative">-0.18%</span></span>
+                <span class="flex items-center gap-2"><strong>BTC</strong> <span
+                        class="ticker-positive">+2.87%</span></span>
+                <span class="flex items-center gap-2"><strong>GTCO</strong> <span
+                        class="ticker-positive">+1.45%</span></span>
+                <span class="flex items-center gap-2"><strong>DANGCEM</strong> <span
+                        class="ticker-negative">-0.67%</span></span>
+                <span class="flex items-center gap-2"><strong>MTNN</strong> <span
+                        class="ticker-positive">+0.89%</span></span>
+            </div>
+            <div class="flex items-center gap-8">
+                <span class="flex items-center gap-2"><strong>AAPL</strong> <span
+                        class="ticker-positive">+2.34%</span></span>
+                <span class="flex items-center gap-2"><strong>GOOGL</strong> <span
+                        class="ticker-positive">+1.87%</span></span>
+                <span class="flex items-center gap-2"><strong>MSFT</strong> <span
+                        class="ticker-negative">-0.54%</span></span>
+                <span class="flex items-center gap-2"><strong>AMZN</strong> <span
+                        class="ticker-positive">+3.21%</span></span>
+                <span class="flex items-center gap-2"><strong>TSLA</strong> <span
+                        class="ticker-positive">+4.56%</span></span>
+                <span class="flex items-center gap-2"><strong>NVDA</strong> <span
+                        class="ticker-positive">+5.12%</span></span>
+                <span class="flex items-center gap-2"><strong>META</strong> <span
+                        class="ticker-negative">-1.23%</span></span>
+                <span class="flex items-center gap-2"><strong>EUR/USD</strong> <span
+                        class="ticker-positive">+0.32%</span></span>
+                <span class="flex items-center gap-2"><strong>GBP/USD</strong> <span
+                        class="ticker-negative">-0.18%</span></span>
+                <span class="flex items-center gap-2"><strong>BTC</strong> <span
+                        class="ticker-positive">+2.87%</span></span>
+                <span class="flex items-center gap-2"><strong>GTCO</strong> <span
+                        class="ticker-positive">+1.45%</span></span>
+                <span class="flex items-center gap-2"><strong>DANGCEM</strong> <span
+                        class="ticker-negative">-0.67%</span></span>
+                <span class="flex items-center gap-2"><strong>MTNN</strong> <span
+                        class="ticker-positive">+0.89%</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="relative min-h-screen pt-48 pb-32 hero-gradient overflow-hidden flex items-center">
+        <!-- Background Elements -->
+        <div class="absolute top-20 left-10 w-96 h-96 bg-purple-500/10 rounded-full blur-[100px]"></div>
+        <div class="absolute bottom-20 right-10 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px]"></div>
+        <div
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-violet-500/5 rounded-full blur-[120px]">
+        </div>
+
+        <div class="relative max-w-7xl mx-auto px-6 w-full">
+            <div class="grid lg:grid-cols-2 gap-20 items-center">
+                <!-- Left Content -->
+                <div class="animate-slide-up">
+                    <div
+                        class="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-violet-500/10 border border-violet-500/20 mb-8 backdrop-blur-sm">
+                        <span class="relative flex h-3 w-3">
+                            <span
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                        </span>
+                        <span class="text-sm font-medium text-violet-200 tracking-wide">AI-Powered Market
+                            Intelligence</span>
+                    </div>
+
+                    <h1 class="text-6xl lg:text-7xl xl:text-8xl font-black leading-[1.05] mb-8 tracking-tight">
+                        Trade Smarter <br />
+                        <span
+                            class="text-3xl lg:text-5xl font-light text-slate-400 italic align-middle mr-2 font-serif">with</span>
+                        <span class="gradient-text-animated text-transparent bg-clip-text">AI-Driven</span> <br />
+                        <span class="relative z-10">
+                            Insights
+                            <svg class="absolute w-[105%] h-3 lg:h-5 -bottom-1 lg:bottom-2 -left-1 text-violet-500 opacity-60 z-[-1]"
+                                viewBox="0 0 100 10" preserveAspectRatio="none">
+                                <path d="M0 5 Q 50 12 100 5" stroke="currentColor" stroke-width="3" fill="none" />
+                            </svg>
+                        </span>
+                    </h1>
+
+                    <p class="text-xl text-slate-300 leading-relaxed mb-10 max-w-xl font-light">
+                        Unlock the power of institutional-grade market analysis. Get real-time signals,
+                        precision-engineered strategies, and deep learning forecasts for US Stocks, NGX, and Forex
+                        markets.
+                    </p>
+
+                    <div class="flex flex-col sm:flex-row gap-5 mb-14">
+                        <a href="/signup"
+                            class="btn-primary px-10 py-5 rounded-2xl text-lg font-bold text-center shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all">
+                            Start Free Trial
+                        </a>
+                        <a href="#demo"
+                            class="px-10 py-5 rounded-2xl text-lg font-bold border border-white/10 hover:bg-white/5 transition-all text-center flex items-center justify-center gap-3 hover:border-white/20">
+                            <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                                <svg class="w-3 h-3 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                            </div>
+                            Watch Demo
+                        </a>
+                    </div>
+
+                    <!-- Trust Badges -->
+                    <div class="flex flex-wrap items-center gap-x-8 gap-y-4 text-sm text-slate-400 font-medium">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                <svg class="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="3">
+                                    <path d="M20 6 9 17 4 12" />
+                                </svg>
+                            </div>
+                            No credit card required
+                        </div>
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                <svg class="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="3">
+                                    <path d="M20 6 9 17 4 12" />
+                                </svg>
+                            </div>
+                            5,000+ active traders
+                        </div>
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                <svg class="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="3">
+                                    <path d="M20 6 9 17 4 12" />
+                                </svg>
+                            </div>
+                            Data-Driven
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Content - Dashboard Preview -->
+                <div class="relative animate-slide-up hidden lg:block" style="animation-delay: 0.2s">
+                    <div class="relative perspective-1000">
+                        <!-- Floating Stats Cards -->
+                        <div
+                            class="absolute -top-12 -left-12 z-20 animate-float glass rounded-2xl p-5 shadow-2xl shadow-emerald-500/20 border border-emerald-500/20 backdrop-blur-xl">
+                            <div class="flex items-center gap-4">
+                                <div
+                                    class="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                                    <svg class="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">
+                                        Today's Profit</p>
+                                    <p class="text-2xl font-bold text-emerald-400">+$2,847.50</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="absolute top-1/4 -right-10 z-20 animate-float glass rounded-2xl p-5 shadow-2xl shadow-violet-500/20 border border-violet-500/20 backdrop-blur-xl"
+                            style="animation-delay: 1.5s">
+                            <div class="flex items-center gap-4">
+                                <div
+                                    class="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+                                    <svg class="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2.5">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M12 6v6l4 2" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">AI
+                                        Accuracy</p>
+                                    <p class="text-2xl font-bold text-white">94.7%</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="absolute -bottom-10 left-12 z-20 animate-float glass rounded-2xl p-5 shadow-2xl shadow-sky-500/20 border border-sky-500/20 backdrop-blur-xl"
+                            style="animation-delay: 2.5s">
+                            <div class="flex items-center gap-4">
+                                <div
+                                    class="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/30">
+                                    <svg class="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2.5">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Active
+                                        Signals</p>
+                                    <p class="text-2xl font-bold text-sky-400">12 Live</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Main Dashboard Image with enhanced styling -->
+                        <div class="relative transform transition-transform hover:scale-[1.01] duration-700">
+                            <div
+                                class="absolute inset-0 bg-gradient-to-r from-violet-600/30 via-transparent to-indigo-600/30 rounded-[2.5rem] blur-2xl">
+                            </div>
+                            <div
+                                class="relative glass rounded-[2rem] p-4 shadow-2xl shadow-violet-500/10 border border-white/10">
+                                <div
+                                    class="bg-surface-card rounded-[1.5rem] overflow-hidden border border-white/5 relative aspect-[16/10]">
+                                    <!-- Dynamic Gradient Overlay -->
+                                    <div
+                                        class="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none z-10">
+                                    </div>
+                                    <img src="/static/images/dashboard-preview.png" alt="MMA Trading Dashboard"
+                                        class="w-full h-full object-cover object-top">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Company Logos -->
+    <section class="py-16 border-y border-white/5 bg-surface-dark/50 backdrop-blur-sm">
+        <div class="max-w-7xl mx-auto px-6">
+            <p class="text-center text-sm text-slate-500 mb-10 tracking-widest uppercase font-medium">Trusted by traders
+                at leading institutions</p>
+            <div
+                class="flex items-center justify-center gap-16 flex-wrap opacity-40 grayscale hover:grayscale-0 transition-all duration-700">
+                <!-- Company Logos (text-based for simplicity) -->
+                <span class="text-2xl font-bold text-slate-300 hover:text-white transition-colors">Google</span>
+                <span class="text-2xl font-bold text-slate-300 hover:text-white transition-colors">Microsoft</span>
+                <span class="text-2xl font-bold text-slate-300 hover:text-white transition-colors">Apple</span>
+                <span class="text-2xl font-bold text-slate-300 hover:text-white transition-colors">Amazon</span>
+                <span class="text-2xl font-bold text-slate-300 hover:text-white transition-colors">Meta</span>
+                <span class="text-2xl font-bold text-slate-300 hover:text-white transition-colors">Netflix</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="py-32 relative">
+        <div class="absolute inset-0 bg-surface-dark/50"></div>
+        <div class="max-w-7xl mx-auto px-6 relative z-10">
+            <div class="text-center mb-24">
+                <span class="text-violet-400 font-medium tracking-wider uppercase text-sm mb-3 block">Simple
+                    Workflow</span>
+                <h2 class="text-4xl lg:text-5xl font-bold mb-6">Start Trading in <span class="gradient-text">3 Simple
+                        Steps</span></h2>
+                <p class="text-xl text-slate-400 max-w-2xl mx-auto">Our AI does the heavy lifting so you can focus on
+                    making profitable decisions.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-12 relative">
+                <!-- Connecting Line -->
+                <div
+                    class="hidden md:block absolute top-12 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-violet-500/0 via-violet-500/20 to-violet-500/0">
+                </div>
+
+                <!-- Step 1 -->
+                <div class="text-center relative">
+                    <div
+                        class="w-24 h-24 mx-auto bg-surface-card rounded-2xl border border-white/5 flex items-center justify-center mb-8 relative z-10 shadow-xl shadow-violet-500/5 group hover:-translate-y-2 transition-transform duration-300">
+                        <div
+                            class="absolute inset-0 bg-violet-500/10 rounded-2xl blur-xl group-hover:bg-violet-500/20 transition-all">
+                        </div>
+                        <svg class="w-10 h-10 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5">
+                            <path
+                                d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                        </svg>
+                        <div
+                            class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center font-bold text-slate-500">
+                            1</div>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Connect Signals</h3>
+                    <p class="text-slate-400 px-6">Sign up and customize your preferences for US, NGX, or Forex markets.
+                    </p>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="text-center relative">
+                    <div
+                        class="w-24 h-24 mx-auto bg-surface-card rounded-2xl border border-white/5 flex items-center justify-center mb-8 relative z-10 shadow-xl shadow-sky-500/5 group hover:-translate-y-2 transition-transform duration-300">
+                        <div
+                            class="absolute inset-0 bg-sky-500/10 rounded-2xl blur-xl group-hover:bg-sky-500/20 transition-all">
+                        </div>
+                        <svg class="w-10 h-10 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5">
+                            <path
+                                d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                            </path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                        <div
+                            class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center font-bold text-slate-500">
+                            2</div>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">AI Analysis</h3>
+                    <p class="text-slate-400 px-6">Our algorithms analyze millions of data points to identify
+                        high-probability trades.</p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="text-center relative">
+                    <div
+                        class="w-24 h-24 mx-auto bg-surface-card rounded-2xl border border-white/5 flex items-center justify-center mb-8 relative z-10 shadow-xl shadow-emerald-500/5 group hover:-translate-y-2 transition-transform duration-300">
+                        <div
+                            class="absolute inset-0 bg-emerald-500/10 rounded-2xl blur-xl group-hover:bg-emerald-500/20 transition-all">
+                        </div>
+                        <svg class="w-10 h-10 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                            <polyline points="17 6 23 6 23 12"></polyline>
+                        </svg>
+                        <div
+                            class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center font-bold text-slate-500">
+                            3</div>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Execute & Profit</h3>
+                    <p class="text-slate-400 px-6">Receive precision alerts and execute trades with confidence to grow
+                        your portfolio.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-32 bg-surface-dark relative">
+        <div
+            class="absolute top-0 right-0 w-[600px] h-[600px] bg-violet-500/5 rounded-full blur-[120px] pointer-events-none">
+        </div>
+
+        <div class="max-w-7xl mx-auto px-6 relative z-10">
+            <div class="text-center mb-20">
+                <span class="text-violet-400 font-medium tracking-wider uppercase text-sm mb-3 block">Premium
+                    Features</span>
+                <h2 class="text-4xl lg:text-5xl font-bold mb-6">Everything You Need to <span class="gradient-text">Trade
+                        Better</span></h2>
+                <p class="text-xl text-slate-400 max-w-2xl mx-auto font-light">
+                    Institutional-grade tools powered by next-gen AI, designed to give you an unfair advantage in every
+                    market.
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div
+                    class="feature-card glass rounded-3xl p-8 hover:bg-surface-card/50 transition-all duration-300 border border-white/5 hover:border-violet-500/30 group">
+                    <div
+                        class="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-violet-500/20">
+                        <svg class="w-8 h-8 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M12 2a10 10 0 1 0 10 10H12V2z" />
+                            <path d="M12 2a10 10 0 0 1 10 10" />
+                            <path d="M12 12l7.5-7.5" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">AI Market Analysis</h3>
+                    <p class="text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+                        Stop guessing. Get instant analysis of market conditions using advanced deep learning models
+                        trained on 20+ years of historical data.
+                    </p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div
+                    class="feature-card glass rounded-3xl p-8 hover:bg-surface-card/50 transition-all duration-300 border border-white/5 hover:border-emerald-500/30 group">
+                    <div
+                        class="w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-emerald-500/20">
+                        <svg class="w-8 h-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Real-Time Signals</h3>
+                    <p class="text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+                        Receive high-precision buy/sell signals with exact entry points, stop-loss, and take-profit
+                        levels. Never miss a profitable move again.
+                    </p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div
+                    class="feature-card glass rounded-3xl p-8 hover:bg-surface-card/50 transition-all duration-300 border border-white/5 hover:border-sky-500/30 group">
+                    <div
+                        class="w-16 h-16 rounded-2xl bg-sky-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-sky-500/20">
+                        <svg class="w-8 h-8 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M2 12h20" />
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Multi-Market Coverage</h3>
+                    <p class="text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+                        One dashboard for everything. Trade US stocks (NASDAQ/NYSE), Nigerian equities (NGX), and major
+                        Forex pairs seamlessly.
+                    </p>
+                </div>
+
+                <!-- Feature 4 -->
+                <div
+                    class="feature-card glass rounded-3xl p-8 hover:bg-surface-card/50 transition-all duration-300 border border-white/5 hover:border-amber-500/30 group">
+                    <div
+                        class="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-amber-500/20">
+                        <svg class="w-8 h-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Smart Risk Management</h3>
+                    <p class="text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+                        Protect your capital. Our AI suggests optimal position sizing and portfolio allocation based on
+                        your personal risk tolerance.
+                    </p>
+                </div>
+
+                <!-- Feature 5 -->
+                <div
+                    class="feature-card glass rounded-3xl p-8 hover:bg-surface-card/50 transition-all duration-300 border border-white/5 hover:border-rose-500/30 group">
+                    <div
+                        class="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-rose-500/20">
+                        <svg class="w-8 h-8 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Instant Alerts</h3>
+                    <p class="text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+                        Never miss a beat. Get notified instantly via Telegram, email, or push notifications the moment
+                        a high-probability setup forms.
+                    </p>
+                </div>
+
+                <!-- Feature 6 -->
+                <div
+                    class="feature-card glass rounded-3xl p-8 hover:bg-surface-card/50 transition-all duration-300 border border-white/5 hover:border-purple-500/30 group">
+                    <div
+                        class="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-purple-500/20">
+                        <svg class="w-8 h-8 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Pro Education</h3>
+                    <p class="text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+                        Master the markets. Access comprehensive trading guides, tutorials, and strategy breakdowns to
+                        level up your trading skills.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Global Markets Section -->
+    <section id="markets" class="py-32 relative overflow-hidden">
+        <div class="absolute inset-0 bg-surface-dark border-y border-white/5"></div>
+        <div class="absolute top-1/2 left-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[120px]"></div>
+        <div class="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px]"></div>
+
+        <div class="max-w-7xl mx-auto px-6 relative z-10">
+            <div class="grid lg:grid-cols-2 gap-20 items-center">
+                <div>
+                    <span class="text-indigo-400 font-medium tracking-wider uppercase text-sm mb-3 block">Global
+                        Coverage</span>
+                    <h2 class="text-4xl lg:text-5xl font-bold mb-6">Trade Every Opportunity <br /> <span
+                            class="gradient-text">Across the Globe</span></h2>
+                    <p class="text-xl text-slate-400 mb-10 leading-relaxed font-light">
+                        Don't limit yourself to one market. Intelligence provides deep intelligence across multiple
+                        asset
+                        classes, allowing you to diversify specifically where the opportunities are hottest.
+                    </p>
+
+                    <div class="space-y-6">
+                        <!-- Market Item -->
+                        <div
+                            class="flex items-center gap-6 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+                            <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-2xl">
+                                🇺🇸</div>
+                            <div>
+                                <h4 class="text-lg font-bold text-white">US Markets</h4>
+                                <p class="text-sm text-slate-400">NASDAQ, NYSE, S&P 500 coverage</p>
+                            </div>
+                            <div class="ml-auto text-right">
+                                <p class="text-emerald-400 font-bold">+18.4%</p>
+                                <p class="text-xs text-slate-500">Avg. Return</p>
+                            </div>
+                        </div>
+
+                        <!-- Market Item -->
+                        <div
+                            class="flex items-center gap-6 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+                            <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center text-2xl">
+                                🇳🇬</div>
+                            <div>
+                                <h4 class="text-lg font-bold text-white">Nigerian Equities</h4>
+                                <p class="text-sm text-slate-400">NGX Top 30 & Banking Sector</p>
+                            </div>
+                            <div class="ml-auto text-right">
+                                <p class="text-emerald-400 font-bold">+32.1%</p>
+                                <p class="text-xs text-slate-500">Avg. Return</p>
+                            </div>
+                        </div>
+
+                        <!-- Market Item -->
+                        <div
+                            class="flex items-center gap-6 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+                            <div
+                                class="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center text-2xl">
+                                💱</div>
+                            <div>
+                                <h4 class="text-lg font-bold text-white">Forex & Crypto</h4>
+                                <p class="text-sm text-slate-400">Major Pairs & Key Cryptocurrencies</p>
+                            </div>
+                            <div class="ml-auto text-right">
+                                <p class="text-emerald-400 font-bold">+12.5%</p>
+                                <p class="text-xs text-slate-500">Avg. Return</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="relative">
+                    <div
+                        class="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-3xl blur-3xl">
+                    </div>
+                    <div class="glass rounded-3xl p-8 border border-white/10 relative">
+                        <div class="flex items-center justify-between mb-8">
+                            <h3 class="text-2xl font-bold">Recent Signals</h3>
+                            <span
+                                class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                                <span class="relative flex h-2 w-2">
+                                    <span
+                                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                Live Feed
+                            </span>
+                        </div>
+
+                        <!-- Signal List -->
+                        <div class="space-y-4">
+                            <!-- Signal Item -->
+                            <div
+                                class="flex items-center justify-between p-4 rounded-xl bg-surface-dark border border-white/5">
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center font-bold">
+                                        NVDA</div>
+                                    <div>
+                                        <p class="font-bold text-white">NVIDIA Corp</p>
+                                        <p class="text-xs text-emerald-400">Strong Buy @ $1.240</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-bold text-emerald-400">+4.2%</p>
+                                    <p class="text-xs text-slate-500">2h ago</p>
+                                </div>
+                            </div>
+
+                            <!-- Signal Item -->
+                            <div
+                                class="flex items-center justify-between p-4 rounded-xl bg-surface-dark border border-white/5">
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center font-bold">
+                                        GTCO</div>
+                                    <div>
+                                        <p class="font-bold text-white">GTCO Plc</p>
+                                        <p class="text-xs text-emerald-400">Buy @ ₦42.50</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-bold text-emerald-400">+1.8%</p>
+                                    <p class="text-xs text-slate-500">4h ago</p>
+                                </div>
+                            </div>
+
+                            <!-- Signal Item -->
+                            <div
+                                class="flex items-center justify-between p-4 rounded-xl bg-surface-dark border border-white/5">
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center font-bold">
+                                        EUR</div>
+                                    <div>
+                                        <p class="font-bold text-white">EUR/USD</p>
+                                        <p class="text-xs text-rose-400">Sell @ 1.0842</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-bold text-emerald-400">+25 pips</p>
+                                    <p class="text-xs text-slate-500">30m ago</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-8 text-center">
+                            <a href="/signup"
+                                class="text-violet-400 hover:text-white transition-colors font-medium text-sm flex items-center justify-center gap-2">
+                                View all active signals
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7" />
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section id="testimonials" class="py-32 relative">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-20">
+                <span class="text-violet-400 font-medium tracking-wider uppercase text-sm mb-3 block">Success
+                    Stories</span>
+                <h2 class="text-4xl lg:text-5xl font-bold mb-6">Loved by <span class="gradient-text">Pro Traders</span>
+                </h2>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Review 1 -->
+                <div class="glass rounded-3xl p-8 border border-white/5 relative">
+                    <div class="flex items-center gap-1 mb-6 text-amber-400">
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed mb-6">"Intelligence's signals are uncannily accurate. I've
+                        increased
+                        my portfolio by 45% in just 3 months focusing on their NGX banking sector calls."</p>
+                    <div class="flex items-center gap-4">
+                        <div
+                            class="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center font-bold text-violet-400">
+                            JD</div>
+                        <div>
+                            <p class="font-bold text-white">James D.</p>
+                            <p class="text-xs text-slate-500">Forex Trader, Lagos</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Review 2 -->
+                <div class="glass rounded-3xl p-8 border border-white/5 relative">
+                    <div class="flex items-center gap-1 mb-6 text-amber-400">
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed mb-6">"Finally, a dashboard that combines US tech stocks
+                        and local Nigerian opportunities. The AI analysis saves me hours of research every morning."</p>
+                    <div class="flex items-center gap-4">
+                        <div
+                            class="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center font-bold text-emerald-400">
+                            SA</div>
+                        <div>
+                            <p class="font-bold text-white">Sarah A.</p>
+                            <p class="text-xs text-slate-500">Equity Analyst, New York</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Review 3 -->
+                <div class="glass rounded-3xl p-8 border border-white/5 relative">
+                    <div class="flex items-center gap-1 mb-6 text-amber-400">
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path
+                                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed mb-6">"The risk management feature changed my game. It
+                        stopped me from blowing up my account and helped me build consistent, steady growth."</p>
+                    <div class="flex items-center gap-4">
+                        <div
+                            class="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center font-bold text-sky-400">
+                            MK</div>
+                        <div>
+                            <p class="font-bold text-white">Michael K.</p>
+                            <p class="text-xs text-slate-500">Crypto Investor, London</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section (Commented Out) -->
+    <!--
+    <section id="pricing" class="py-32 bg-surface-dark relative border-t border-white/5">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-20">
+                <h2 class="text-4xl lg:text-5xl font-bold mb-6">Simple, Transparent <span class="gradient-text">Pricing</span></h2>
+                <p class="text-xl text-slate-400 max-w-2xl mx-auto font-light">
+                    Choose the plan that fits your trading style. No hidden fees.
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                <div class="glass rounded-3xl p-8 border border-white/5 flex flex-col hover:border-white/10 transition-colors">
+                    <div class="mb-6">
+                        <span class="px-3 py-1 rounded-full bg-white/5 text-white text-xs font-bold uppercase tracking-wider">Starter</span>
+                        <h3 class="text-4xl font-bold mt-4 text-white">$0 <span class="text-sm font-normal text-slate-400">/month</span></h3>
+                        <p class="text-slate-400 mt-2">Perfect for beginners exploring the market.</p>
+                    </div>
+                    <ul class="space-y-4 mb-8 flex-1">
+                        <li class="flex items-center gap-3 text-sm text-slate-300">
+                             <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                             Daily Market Summary
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300">
+                             <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                             Basic Stock Screeners
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300">
+                             <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                             Limited AI Queries
+                        </li>
+                    </ul>
+                    <a href="/signup" class="w-full py-4 rounded-xl border border-white/10 hover:bg-white/5 transition-colors font-bold text-center">Get Started</a>
+                </div>
+
+                <div class="relative">
+                    <div class="absolute inset-0 bg-gradient-to-b from-violet-600/20 to-indigo-600/20 rounded-3xl blur-xl"></div>
+                    <div class="glass rounded-3xl p-8 border border-violet-500/30 flex flex-col relative bg-surface-card/60">
+                        <div class="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-xs font-bold uppercase tracking-wider shadow-lg">Most Popular</div>
+                        <div class="mb-6">
+                            <span class="px-3 py-1 rounded-full bg-violet-500/10 text-violet-400 text-xs font-bold uppercase tracking-wider">Pro Trader</span>
+                            <h3 class="text-4xl font-bold mt-4 text-white">$29 <span class="text-sm font-normal text-slate-400">/month</span></h3>
+                            <p class="text-slate-400 mt-2">For serious traders who want an edge.</p>
+                        </div>
+                        <ul class="space-y-4 mb-8 flex-1">
+                            <li class="flex items-center gap-3 text-sm text-white">
+                                <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                Real-time AI Signals
+                            </li>
+                            <li class="flex items-center gap-3 text-sm text-white">
+                                <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                Advanced Technical Analysis
+                            </li>
+                            <li class="flex items-center gap-3 text-sm text-white">
+                                <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                Unlimited AI Search
+                            </li>
+                            <li class="flex items-center gap-3 text-sm text-white">
+                                <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                Priority Support
+                            </li>
+                        </ul>
+                        <a href="/signup" class="w-full py-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:shadow-lg hover:shadow-violet-500/25 transition-all font-bold text-center">Start Free Trial</a>
+                    </div>
+                </div>
+
+                <div class="glass rounded-3xl p-8 border border-white/5 flex flex-col hover:border-white/10 transition-colors">
+                    <div class="mb-6">
+                        <span class="px-3 py-1 rounded-full bg-white/5 text-white text-xs font-bold uppercase tracking-wider">Institutional</span>
+                        <h3 class="text-4xl font-bold mt-4 text-white">Custom</h3>
+                        <p class="text-slate-400 mt-2">For funds and large volume traders.</p>
+                    </div>
+                    <ul class="space-y-4 mb-8 flex-1">
+                        <li class="flex items-center gap-3 text-sm text-slate-300">
+                             <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                             API Access
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300">
+                             <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                             Dedicated Account Manager
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-slate-300">
+                             <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                             Custom Model Training
+                        </li>
+                    </ul>
+                    <a href="#" class="w-full py-4 rounded-xl border border-white/10 hover:bg-white/5 transition-colors font-bold text-center">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+    </section>
+    -->
+
+    <!-- CTA Section -->
+    <section class="py-32 relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-r from-violet-900/20 via-indigo-900/40 to-violet-900/20"></div>
+        <div
+            class="absolute top-0 left-1/4 w-[600px] h-[600px] bg-violet-500/10 rounded-full blur-[100px] pointer-events-none">
+        </div>
+        <div
+            class="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none">
+        </div>
+
+        <div class="relative max-w-4xl mx-auto px-6 text-center">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8">
+                <span class="text-sm font-medium text-white">🚀 Join the revolution</span>
+            </div>
+            <h2 class="text-5xl lg:text-7xl font-bold mb-8 tracking-tight">Ready to Transform <br /> Your <span
+                    class="gradient-text">Trading Journey?</span></h2>
+            <p class="text-xl text-slate-300 mb-12 max-w-2xl mx-auto font-light leading-relaxed">
+                Join thousands of professional traders who are actively using Intelligence's AI to outperform the
+                market every single day.
+            </p>
+
+            <div class="flex flex-col sm:flex-row gap-6 justify-center">
+                <a href="/signup"
+                    class="btn-primary px-12 py-5 rounded-2xl text-lg font-bold shadow-2xl shadow-violet-500/30 hover:shadow-violet-500/50 transition-all">
+                    Get Started Free
+                </a>
+                <a href="/login"
+                    class="px-12 py-5 rounded-2xl text-lg font-bold border border-white/20 hover:bg-white/5 transition-all">
+                    Sign In
+                </a>
+            </div>
+            <p class="mt-8 text-sm text-slate-500">No credit card required for free trial. Cancel anytime.</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-white/5 bg-surface-dark">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center gap-3">
+                    <img src="/static/images/logo.png" alt="Logo" class="w-8 h-8 rounded-lg object-cover">
+                    <span class="text-xl font-cursive font-bold">Intelligence</span>
+                </div>
+
+                <p class="text-sm text-slate-500">© 2025 Intelligence. All rights reserved.</p>
+
+                <div class="flex items-center gap-6 text-sm text-slate-400">
+                    <a href="#" class="hover:text-white transition-colors">Privacy</a>
+                    <a href="#" class="hover:text-white transition-colors">Terms</a>
+                    <a href="#" class="hover:text-white transition-colors">Contact</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+
+
+    <script>
+        // Live Signal Simulation
+        const signals = [
+            { symbol: 'GTCO', market: 'NGX', action: 'BUY', price: '₦45.20', gain: '+2.4%' },
+            { symbol: 'TSLA', market: 'US', action: 'BUY', price: '$245.30', gain: '+1.8%' },
+            { symbol: 'EUR/USD', market: 'FOREX', action: 'SELL', price: '1.0845', gain: '+12pips' },
+            { symbol: 'MTNN', market: 'NGX', action: 'HOLD', price: '₦280.50', gain: '+0.5%' },
+            { symbol: 'NVDA', market: 'US', action: 'BUY', price: '$890.10', gain: '+3.1%' }
+        ];
+
+        function showToast() {
+            const signal = signals[Math.floor(Math.random() * signals.length)];
+            const container = document.getElementById('toast-container');
+
+            const toast = document.createElement('div');
+            toast.className = 'signal-toast pointer-events-auto bg-surface-card border border-white/10 p-4 rounded-xl shadow-2xl flex items-center gap-4 w-72 backdrop-blur-xl';
+            toast.innerHTML = `
+                <div class="w-10 h-10 rounded-full ${signal.action === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'} flex items-center justify-center font-bold text-xs">
+                    ${signal.action}
+                </div>
+                <div>
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-bold text-white">${signal.symbol}</span>
+                        <span class="text-xs text-slate-500 bg-white/5 px-1.5 py-0.5 rounded">${signal.market}</span>
+                    </div>
+                    <div class="text-sm text-slate-300">Target: <span class="text-white">${signal.price}</span></div>
+                </div>
+                <div class="ml-auto text-emerald-400 font-bold text-sm text-right">
+                    ${signal.gain}<br>
+                    <span class="text-[10px] text-slate-500 font-normal">Just now</span>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            // sound effect (optional/muted by default)
+
+            setTimeout(() => {
+                toast.style.transition = 'all 0.5s ease';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 500);
+            }, 5000);
+        }
+
+        // Start random toasts
+        setTimeout(() => {
+            showToast();
+            setInterval(() => {
+                if (Math.random() > 0.3) showToast();
+            }, 8000 + Math.random() * 5000); // Random interval 8-13s
+        }, 2000);
+    </script>
+</body>
+
+</html>

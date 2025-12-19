@@ -63,6 +63,26 @@ class NotificationService:
         except Exception as e:
             logging.error(f"Failed to send email: {e}")
             return False
+        
+    def send_telegram(self, message: str) -> bool:
+        """Send message to Telegram"""
+        if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
+            logging.warning("Telegram credentials not set. Skipping notification.")
+            return False
+
+        try:
+            import requests
+            url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+            payload = {
+                "chat_id": settings.TELEGRAM_CHAT_ID,
+                "text": message,
+                "parse_mode": "Markdown"
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            return response.status_code == 200
+        except Exception as e:
+            logging.error(f"Failed to send Telegram message: {e}")
+            return False
 
     def _markdown_to_html(self, text: str) -> str:
         # Very basic markdown to html for specific elements used by LLM

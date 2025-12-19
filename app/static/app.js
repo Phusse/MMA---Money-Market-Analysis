@@ -1334,6 +1334,9 @@ function createForexCard(pair, category, pairIndex) {
     const rsiText = rsi ? `RSI ${rsi.toFixed(0)}` : '';
     const macdTrend = pair.technicals?.macd_trend || '';
 
+    // Build Yahoo Finance symbol for quant API
+    const yahooSymbol = pair.symbol.replace('/', '') + '=X';
+
     return `
         <div class="forex-card ${category} ${strongClass}" onclick="openForexChartByIndex(${pairIndex})">
             <div class="forex-card-main">
@@ -1359,16 +1362,20 @@ function createForexCard(pair, category, pairIndex) {
             </div>
             <div class="forex-card-actions">
                 <button class="forex-chart-btn" onclick="event.stopPropagation(); openTradingViewModal('${escapeHtml(pair.symbol)}', '${escapeHtml(pair.name)}')">
-                    📊 View Chart
+                    📊 Chart
+                </button>
+                <button class="forex-quant-btn" onclick="event.stopPropagation(); showQuantAnalysisModal('${yahooSymbol}')" title="Fibonacci, Bollinger, Mean Reversion, Monte Carlo">
+                    🧠 Quant
                 </button>
                 ${isStrong ? `<button class="forex-trade-btn" onclick="event.stopPropagation(); tookTheTrade('${escapeHtml(pair.symbol)}', '${escapeHtml(pair.name)}', '${signal}', ${pair.price})">
-                    ✅ I Took The Trade
+                    ✅ Trade
                 </button>` : ''}
-                <div class="forex-card-hint">Click for analysis →</div>
+                <div class="forex-card-hint">Click for full analysis →</div>
             </div>
         </div>
     `;
 }
+
 
 function getSignalEmoji(signal) {
     const emojis = {
@@ -3353,3 +3360,2011 @@ async function tookTheTrade(symbol, pairName, signal, price) {
 
 // Expose function globally
 window.tookTheTrade = tookTheTrade;
+
+// ============================================
+// Settings Page & Role-Based Content Filtering
+// ============================================
+
+let captchaNum1 = 0;
+let captchaNum2 = 0;
+let selectedNewAccountType = null;
+
+// Initialize settings page when it becomes visible
+document.addEventListener('DOMContentLoaded', () => {
+    // Apply role-based filtering on page load
+    applyRoleBasedFiltering();
+
+    // Load settings when settings page is shown
+    const settingsLink = document.querySelector('[data-page="settings"]');
+    if (settingsLink) {
+        settingsLink.addEventListener('click', loadSettingsPage);
+    }
+});
+
+// Apply role-based content filtering based on account type
+function applyRoleBasedFiltering() {
+    const accountType = localStorage.getItem('mma_account_type') || 'both';
+
+    // Navigation items to show/hide
+    const forexNav = document.querySelector('[data-page="forex"]');
+    const stockNav = document.querySelector('[data-page="dashboard"]');
+    const nigerianNav = document.querySelector('[data-page="nigerian"]');
+
+    // Pages to show/hide based on account type
+    if (accountType === 'forex') {
+        // Hide stock-related content
+        stockNav?.closest('.nav-link, .sub-item')?.classList.add('hidden-by-role');
+        nigerianNav?.closest('.nav-link, .sub-item')?.classList.add('hidden-by-role');
+        document.querySelector('.stock-search-section')?.classList.add('hidden-by-role');
+
+        // Show forex content
+        forexNav?.closest('.nav-link, .sub-item')?.classList.remove('hidden-by-role');
+    } else if (accountType === 'stock') {
+        // Hide forex-related content
+        forexNav?.closest('.nav-link, .sub-item')?.classList.add('hidden-by-role');
+
+        // Show stock content
+        stockNav?.closest('.nav-link, .sub-item')?.classList.remove('hidden-by-role');
+        nigerianNav?.closest('.nav-link, .sub-item')?.classList.remove('hidden-by-role');
+        document.querySelector('.stock-search-section')?.classList.remove('hidden-by-role');
+    } else {
+        // Show everything for 'both'
+        document.querySelectorAll('.hidden-by-role').forEach(el => {
+            el.classList.remove('hidden-by-role');
+        });
+    }
+
+    console.log(`📊 Role-based filtering applied: ${accountType}`);
+}
+
+// Load settings page data
+async function loadSettingsPage() {
+    const user = JSON.parse(localStorage.getItem('mma_user') || '{}');
+    const accountType = localStorage.getItem('mma_account_type') || 'both';
+
+    // Update settings display
+    document.getElementById('settingsEmail').textContent = user.email || 'Not logged in';
+    document.getElementById('settingsName').textContent = user.name || '--';
+    document.getElementById('settingsAccountType').textContent = accountType.charAt(0).toUpperCase() + accountType.slice(1);
+
+    // Highlight current account type in selector
+    document.querySelectorAll('.account-type-option').forEach(btn => {
+        btn.classList.remove('selected');
+        if (btn.dataset.type === accountType) {
+            btn.classList.add('selected');
+        }
+    });
+
+    // Try to get full profile from API
+    const token = localStorage.getItem('mma_access_token');
+    if (token) {
+        try {
+            const response = await fetch('/api/user/profile', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+
+            if (data.success && data.profile) {
+                document.getElementById('settingsPlan').textContent = data.profile.plan || 'Free';
+            }
+        } catch (error) {
+            console.log('Could not fetch profile:', error);
+        }
+    }
+}
+
+// Select new account type (before confirmation)
+function selectNewAccountType(type, button) {
+    const currentType = localStorage.getItem('mma_account_type') || 'both';
+
+    // Update button selection
+    document.querySelectorAll('.account-type-option').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    button.classList.add('selected');
+
+    // If selecting a different type, show confirmation form
+    if (type !== currentType) {
+        selectedNewAccountType = type;
+        showAccountTypeChangeForm();
+    } else {
+        // Same type selected, hide form
+        selectedNewAccountType = null;
+        document.getElementById('changeTypeForm').style.display = 'none';
+    }
+}
+
+// Show the confirmation form with captcha
+function showAccountTypeChangeForm() {
+    // Generate captcha
+    captchaNum1 = Math.floor(Math.random() * 10) + 1;
+    captchaNum2 = Math.floor(Math.random() * 10) + 1;
+    document.getElementById('captchaQuestion').textContent = `${captchaNum1} + ${captchaNum2}`;
+
+    // Clear previous inputs
+    document.getElementById('confirmPassword').value = '';
+    document.getElementById('captchaAnswer').value = '';
+    document.getElementById('changeTypeError').style.display = 'none';
+    document.getElementById('changeTypeSuccess').style.display = 'none';
+
+    // Show form
+    document.getElementById('changeTypeForm').style.display = 'block';
+}
+
+// Cancel account type change
+function cancelAccountTypeChange() {
+    const currentType = localStorage.getItem('mma_account_type') || 'both';
+
+    // Reset to current type
+    document.querySelectorAll('.account-type-option').forEach(btn => {
+        btn.classList.remove('selected');
+        if (btn.dataset.type === currentType) {
+            btn.classList.add('selected');
+        }
+    });
+
+    selectedNewAccountType = null;
+    document.getElementById('changeTypeForm').style.display = 'none';
+}
+
+// Confirm account type change
+async function confirmAccountTypeChange() {
+    const password = document.getElementById('confirmPassword').value;
+    const captchaAnswer = parseInt(document.getElementById('captchaAnswer').value);
+    const errorEl = document.getElementById('changeTypeError');
+    const successEl = document.getElementById('changeTypeSuccess');
+
+    errorEl.style.display = 'none';
+    successEl.style.display = 'none';
+
+    // Validate captcha
+    if (captchaAnswer !== captchaNum1 + captchaNum2) {
+        errorEl.textContent = '❌ Incorrect answer. Please solve the math problem.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    // Validate password
+    if (!password) {
+        errorEl.textContent = '❌ Please enter your password.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    if (!selectedNewAccountType) {
+        errorEl.textContent = '❌ No account type selected.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('mma_access_token');
+
+        const response = await fetch('/api/user/account-type', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                password: password,
+                new_account_type: selectedNewAccountType
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            // Update localStorage
+            localStorage.setItem('mma_account_type', selectedNewAccountType);
+
+            // Update user object
+            const user = JSON.parse(localStorage.getItem('mma_user') || '{}');
+            user.account_type = selectedNewAccountType;
+            localStorage.setItem('mma_user', JSON.stringify(user));
+
+            // Show success
+            successEl.textContent = `✅ Account type changed to "${selectedNewAccountType}". Refreshing...`;
+            successEl.style.display = 'block';
+
+            // Apply new filtering and refresh page after delay
+            setTimeout(() => {
+                applyRoleBasedFiltering();
+                document.getElementById('settingsAccountType').textContent =
+                    selectedNewAccountType.charAt(0).toUpperCase() + selectedNewAccountType.slice(1);
+                document.getElementById('changeTypeForm').style.display = 'none';
+                selectedNewAccountType = null;
+            }, 1500);
+        } else {
+            errorEl.textContent = data.detail || '❌ Failed to update. Check your password.';
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        errorEl.textContent = '❌ Connection error. Please try again.';
+        errorEl.style.display = 'block';
+        console.error('Account type change error:', error);
+    }
+}
+
+// Toggle password visibility in settings
+function toggleConfirmPassword() {
+    const input = document.getElementById('confirmPassword');
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+// Logout user
+function logoutUser() {
+    // Clear all auth data
+    localStorage.removeItem('mma_access_token');
+    localStorage.removeItem('mma_refresh_token');
+    localStorage.removeItem('mma_user');
+    localStorage.removeItem('mma_account_type');
+
+    // Redirect to login
+    window.location.href = '/login';
+}
+
+// Expose settings functions globally
+window.selectNewAccountType = selectNewAccountType;
+window.cancelAccountTypeChange = cancelAccountTypeChange;
+window.confirmAccountTypeChange = confirmAccountTypeChange;
+window.toggleConfirmPassword = toggleConfirmPassword;
+window.logoutUser = logoutUser;
+window.loadSettingsPage = loadSettingsPage;
+window.applyRoleBasedFiltering = applyRoleBasedFiltering;
+
+// ============================================
+// FOREX-FOCUSED DASHBOARD FEATURES
+// ============================================
+
+// ============================================
+// Role-Based Content Filtering
+// ============================================
+function applyRoleBasedFiltering() {
+    const accountType = localStorage.getItem('mma_account_type') || 'both';
+    const body = document.body;
+
+    // Remove existing account type classes
+    body.classList.remove('account-forex', 'account-stock', 'account-both');
+
+    // Add current account type class
+    body.classList.add(`account-${accountType}`);
+
+    // Update navigation visibility based on account type
+    const forexNav = document.querySelector('[data-page="forex"]');
+    const usMarketsNav = document.querySelector('[data-page="usMarkets"]');
+    const nigerianNav = document.querySelector('[data-page="nigerian"]');
+
+    if (accountType === 'forex') {
+        // Hide stock-related navigation
+        if (usMarketsNav) usMarketsNav.closest('.nav-link')?.classList.add('hidden');
+        if (nigerianNav) nigerianNav.closest('.nav-link')?.classList.add('hidden');
+        if (forexNav) forexNav.closest('.nav-link')?.classList.remove('hidden');
+    } else if (accountType === 'stock') {
+        // Hide forex-related navigation
+        if (forexNav) forexNav.closest('.nav-link')?.classList.add('hidden');
+        if (usMarketsNav) usMarketsNav.closest('.nav-link')?.classList.remove('hidden');
+        if (nigerianNav) nigerianNav.closest('.nav-link')?.classList.remove('hidden');
+    } else {
+        // Show all for 'both' account type
+        if (forexNav) forexNav.closest('.nav-link')?.classList.remove('hidden');
+        if (usMarketsNav) usMarketsNav.closest('.nav-link')?.classList.remove('hidden');
+        if (nigerianNav) nigerianNav.closest('.nav-link')?.classList.remove('hidden');
+    }
+
+    // Filter dashboard content sections
+    const forexSections = document.querySelectorAll('.forex-section');
+    const stockSections = document.querySelectorAll('.stock-section');
+
+    forexSections.forEach(section => {
+        section.style.display = (accountType === 'stock') ? 'none' : '';
+    });
+
+    stockSections.forEach(section => {
+        section.style.display = (accountType === 'forex') ? 'none' : '';
+    });
+
+    console.log(`✅ Applied role-based filtering for account type: ${accountType}`);
+}
+
+// ============================================
+// Settings Page Loader
+// ============================================
+function loadSettingsPage() {
+    const token = localStorage.getItem('mma_access_token');
+    const user = JSON.parse(localStorage.getItem('mma_user') || '{}');
+    const accountType = localStorage.getItem('mma_account_type') || 'both';
+
+    // Update auth notice visibility
+    const authNotice = document.getElementById('authNotice');
+    const userProfileCard = document.getElementById('userProfileCard');
+
+    if (token && user.email) {
+        // User is logged in
+        if (authNotice) authNotice.style.display = 'none';
+        if (userProfileCard) userProfileCard.classList.remove('hidden');
+
+        // Update user info
+        const userName = document.getElementById('userName');
+        const userEmail = document.getElementById('userEmail');
+        const userAvatar = document.getElementById('userAvatar');
+        const userAccountType = document.getElementById('userAccountType');
+
+        if (userName) userName.textContent = user.name || user.email.split('@')[0];
+        if (userEmail) userEmail.textContent = user.email;
+        if (userAvatar) userAvatar.textContent = (user.name || user.email)[0].toUpperCase();
+        if (userAccountType) {
+            const typeLabels = { forex: '💱 Forex Only', stock: '📈 Stocks Only', both: '🚀 Both Markets' };
+            userAccountType.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-violet-400"></span>${typeLabels[accountType] || 'Both Markets'}`;
+        }
+    } else {
+        // User is not logged in
+        if (authNotice) authNotice.style.display = 'block';
+        if (userProfileCard) userProfileCard.classList.add('hidden');
+    }
+
+    // Update current account type display
+    const currentTypeDisplay = document.getElementById('currentAccountTypeDisplay');
+    if (currentTypeDisplay) {
+        const typeLabels = { forex: 'Forex Only', stock: 'Stocks Only', both: 'Both (Forex & Stocks)' };
+        currentTypeDisplay.textContent = typeLabels[accountType] || 'Both (Forex & Stocks)';
+    }
+
+    // Highlight current account type button
+    document.querySelectorAll('.account-type-btn').forEach(btn => {
+        btn.classList.remove('selected');
+        if (btn.dataset.type === accountType) {
+            btn.classList.add('selected');
+        }
+    });
+}
+
+// ============================================
+// Forex Data Loader
+// ============================================
+async function loadForexData() {
+    const refreshBtn = document.getElementById('refreshForexBtn');
+    const majorGrid = document.getElementById('majorPairsGrid');
+    const nairaGrid = document.getElementById('nairaPairsGrid');
+    const commoditiesGrid = document.getElementById('commoditiesGrid');
+    const forexLastUpdate = document.getElementById('forexLastUpdate');
+
+    try {
+        // Show loading state
+        if (refreshBtn) {
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<span>⏳</span> <span class="btn-text">Loading...</span>';
+        }
+
+        // Show skeleton loaders
+        [majorGrid, nairaGrid, commoditiesGrid].forEach(grid => {
+            if (grid) {
+                grid.innerHTML = `
+                    <div class="bg-surface-card/50 backdrop-blur-xl border border-white/5 rounded-2xl p-6 animate-pulse">
+                        <div class="h-6 bg-white/10 rounded mb-3 w-24"></div>
+                        <div class="h-8 bg-white/10 rounded mb-2 w-32"></div>
+                        <div class="h-4 bg-white/10 rounded w-20"></div>
+                    </div>
+                `.repeat(3);
+            }
+        });
+
+        console.log('💱 Fetching forex data...');
+        const response = await fetch('/api/forex');
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'Failed to fetch forex data');
+        }
+
+        console.log('✅ Forex data loaded:', data.data);
+
+        // Store pairs globally
+        window.allForexPairs = [];
+
+        // Display major pairs
+        if (majorGrid) {
+            displayForexPairs(majorGrid, data.data.major_pairs, 'major');
+        }
+
+        // Display naira pairs
+        if (nairaGrid) {
+            displayForexPairs(nairaGrid, data.data.naira_pairs, 'naira');
+        }
+
+        // Display commodities
+        if (commoditiesGrid) {
+            displayForexPairs(commoditiesGrid, data.data.commodities, 'commodity');
+        }
+
+        // Update last refresh time
+        if (forexLastUpdate) {
+            forexLastUpdate.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        // Update forex session status
+        updateForexSessions();
+
+        // Record signals
+        const allPairs = [...(data.data.major_pairs || []), ...(data.data.naira_pairs || []), ...(data.data.commodities || [])];
+        if (typeof recordForexSignals === 'function') {
+            recordForexSignals(allPairs);
+        }
+
+        // Display top signal
+        if (typeof displayTopSignal === 'function') {
+            displayTopSignal(allPairs);
+        }
+
+        // Show toast
+        showToast('Forex data updated successfully', 'success');
+
+    } catch (error) {
+        console.error('❌ Forex fetch error:', error);
+        if (majorGrid) {
+            majorGrid.innerHTML = `
+                <div class="bg-surface-card/50 backdrop-blur-xl border border-red-500/30 rounded-2xl p-6 text-center col-span-full">
+                    <span class="text-4xl mb-3 block">⚠️</span>
+                    <p class="text-red-400">Failed to load forex data: ${error.message}</p>
+                    <button onclick="loadForexData()" class="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-xl text-sm font-medium transition-all">
+                        Try Again
+                    </button>
+                </div>
+            `;
+        }
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<span>📊</span> <span class="btn-text">Analyze Markets</span>';
+        }
+    }
+}
+
+// ============================================
+// Currency Strength Loader
+// ============================================
+async function loadCurrencyStrength() {
+    const summaryEl = document.getElementById('strengthSummary');
+    const gridEl = document.getElementById('currencyStrengthGrid');
+    const opportunitiesEl = document.getElementById('strengthOpportunities');
+
+    try {
+        // Show loading state
+        if (summaryEl) summaryEl.innerHTML = '<span class="animate-pulse">Loading currency strength analysis...</span>';
+        if (gridEl) {
+            gridEl.innerHTML = `
+                <div class="bg-surface-card/50 backdrop-blur-xl border border-white/5 rounded-xl p-4 animate-pulse">
+                    <div class="h-6 bg-white/10 rounded mb-2 w-16"></div>
+                    <div class="h-8 bg-white/10 rounded w-24"></div>
+                </div>
+            `.repeat(6);
+        }
+
+        console.log('💪 Fetching currency strength...');
+        const response = await fetch('/api/forex/strength');
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'Failed to fetch currency strength');
+        }
+
+        console.log('✅ Currency strength loaded:', data);
+
+        // Update summary
+        if (summaryEl && data.summary) {
+            summaryEl.innerHTML = `<span class="text-emerald-400 font-medium">${data.summary}</span>`;
+        }
+
+        // Display currency strength grid
+        if (gridEl && data.strengths) {
+            gridEl.innerHTML = data.strengths.map((currency, index) => {
+                const trendIcon = currency.trend === 'bullish' ? '📈' : currency.trend === 'bearish' ? '📉' : '➡️';
+                const trendColor = currency.trend === 'bullish' ? 'text-emerald-400' : currency.trend === 'bearish' ? 'text-red-400' : 'text-slate-400';
+                const scoreColor = currency.score > 20 ? 'bg-emerald-500' : currency.score < -20 ? 'bg-red-500' : 'bg-slate-500';
+                const scorePercent = Math.min(100, Math.max(0, (currency.score + 100) / 2));
+
+                return `
+                    <div class="currency-item ${currency.trend} bg-surface-card/50 backdrop-blur-xl border border-white/5 rounded-xl p-4 hover:border-violet-500/30 transition-all stagger-item" style="animation-delay: ${index * 0.05}s">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-2xl">${currency.flag}</span>
+                                <div>
+                                    <span class="font-bold text-lg">${currency.currency}</span>
+                                    <span class="text-xs text-slate-500 block">${currency.name}</span>
+                                </div>
+                            </div>
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full ${currency.trend === 'bullish' ? 'bg-emerald-500/20 text-emerald-400' : currency.trend === 'bearish' ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}">
+                                #${currency.rank}
+                            </span>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <div class="flex items-center justify-between text-sm mb-1">
+                                <span class="text-slate-400">Strength</span>
+                                <span class="${trendColor} font-semibold">${currency.score > 0 ? '+' : ''}${currency.score.toFixed(1)}</span>
+                            </div>
+                            <div class="currency-strength-bar">
+                                <div class="currency-strength-indicator" style="left: ${scorePercent}%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-slate-500">24h: <span class="${currency.change_24h >= 0 ? 'text-emerald-400' : 'text-red-400'}">${currency.change_24h >= 0 ? '+' : ''}${currency.change_24h.toFixed(2)}%</span></span>
+                            <span class="${trendColor}">${trendIcon} ${currency.trend.charAt(0).toUpperCase() + currency.trend.slice(1)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Display trading opportunities
+        if (opportunitiesEl && data.opportunities) {
+            if (data.opportunities.length > 0) {
+                opportunitiesEl.innerHTML = data.opportunities.map((opp, index) => {
+                    const isBuy = opp.action === 'BUY';
+                    return `
+                        <div class="bg-surface-card/50 backdrop-blur-xl border ${isBuy ? 'border-emerald-500/30' : 'border-red-500/30'} rounded-xl p-4 hover:scale-[1.02] transition-all cursor-pointer stagger-item" 
+                             onclick="analyzeForexPairDirect('${opp.pair}')"
+                             style="animation-delay: ${index * 0.1}s">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-bold text-lg">${opp.pair}</span>
+                                <span class="px-3 py-1 text-xs font-bold rounded-full ${isBuy ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}">
+                                    ${opp.action}
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-400">${opp.reason}</p>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                opportunitiesEl.innerHTML = `
+                    <div class="text-center text-slate-500 text-sm py-4 col-span-full">
+                        No strong divergence opportunities detected. Markets are balanced.
+                    </div>
+                `;
+            }
+        }
+
+        showToast('Currency strength updated', 'success');
+
+    } catch (error) {
+        console.error('❌ Currency strength error:', error);
+        if (summaryEl) summaryEl.innerHTML = `<span class="text-red-400">Error: ${error.message}</span>`;
+        if (gridEl) {
+            gridEl.innerHTML = `
+                <div class="bg-surface-card/50 backdrop-blur-xl border border-red-500/30 rounded-xl p-6 text-center col-span-full">
+                    <span class="text-4xl mb-3 block">⚠️</span>
+                    <p class="text-red-400">Failed to load currency strength</p>
+                    <button onclick="loadCurrencyStrength()" class="mt-3 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-xl text-sm font-medium transition-all">
+                        Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+// ============================================
+// Forex Pair Analyzer
+// ============================================
+function initForexPairAnalyzer() {
+    const popularPairsGrid = document.getElementById('popularPairsGrid');
+
+    const popularPairs = [
+        { symbol: 'EUR/USD', name: 'Euro/Dollar', flag: '🇪🇺' },
+        { symbol: 'GBP/USD', name: 'Pound/Dollar', flag: '🇬🇧' },
+        { symbol: 'USD/JPY', name: 'Dollar/Yen', flag: '🇯🇵' },
+        { symbol: 'USD/CHF', name: 'Dollar/Franc', flag: '🇨🇭' },
+        { symbol: 'AUD/USD', name: 'Aussie/Dollar', flag: '🇦🇺' },
+        { symbol: 'USD/NGN', name: 'Dollar/Naira', flag: '🇳🇬' }
+    ];
+
+    if (popularPairsGrid) {
+        popularPairsGrid.innerHTML = popularPairs.map(pair => `
+            <button onclick="analyzeForexPairDirect('${pair.symbol}')"
+                class="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/30 rounded-lg text-sm font-medium transition-all flex items-center gap-2">
+                <span>${pair.flag}</span>
+                <span>${pair.symbol}</span>
+            </button>
+        `).join('');
+    }
+}
+
+async function analyzeForexPair() {
+    const input = document.getElementById('forexPairInput');
+    const symbol = input ? input.value.trim().toUpperCase() : '';
+
+    if (!symbol) {
+        showToast('Please enter a forex pair (e.g., EUR/USD)', 'error');
+        return;
+    }
+
+    // Normalize the symbol format
+    let normalizedSymbol = symbol;
+    if (!symbol.includes('/') && symbol.length === 6) {
+        normalizedSymbol = symbol.slice(0, 3) + '/' + symbol.slice(3);
+    }
+
+    await analyzeForexPairDirect(normalizedSymbol);
+}
+
+async function analyzeForexPairDirect(symbol) {
+    console.log(`📊 Analyzing forex pair: ${symbol}`);
+
+    // Show loading modal
+    showAnalysisModal(symbol, 'Loading analysis...');
+
+    try {
+        // Fetch full analysis
+        const response = await fetch(`/api/analysis/full/${encodeURIComponent(symbol)}`);
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'Analysis failed');
+        }
+
+        // Display comprehensive analysis
+        displayPairAnalysis(symbol, data.data);
+
+    } catch (error) {
+        console.error('❌ Pair analysis error:', error);
+        showAnalysisModal(symbol, `
+            <div class="text-center py-8">
+                <span class="text-4xl mb-4 block">⚠️</span>
+                <p class="text-red-400 mb-4">Failed to analyze ${symbol}: ${error.message}</p>
+                <button onclick="closeAnalysisModal()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-medium transition-all">
+                    Close
+                </button>
+            </div>
+        `);
+    }
+}
+
+function showAnalysisModal(symbol, content) {
+    let modal = document.getElementById('pairAnalysisModal');
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pairAnalysisModal';
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm';
+        modal.onclick = (e) => { if (e.target === modal) closeAnalysisModal(); };
+        document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+        <div class="bg-surface-card border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div class="sticky top-0 bg-surface-card border-b border-white/10 px-6 py-4 flex items-center justify-between z-10">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">📊</span>
+                    <h2 class="text-xl font-bold">${symbol} Analysis</h2>
+                </div>
+                <button onclick="closeAnalysisModal()" class="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6" id="analysisModalContent">
+                ${content}
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeAnalysisModal() {
+    const modal = document.getElementById('pairAnalysisModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
+
+function displayPairAnalysis(symbol, data) {
+    const mtf = data.multi_timeframe || {};
+    const sr = data.support_resistance || {};
+    const backtest = data.backtest || {};
+    const calendar = data.calendar_warnings || [];
+
+    const signalsHtml = (mtf.signals || []).map(s => {
+        const isBuy = s.signal.includes('Buy');
+        const isSell = s.signal.includes('Sell');
+        return `
+            <div class="bg-white/5 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-medium">${s.timeframe}</span>
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${isBuy ? 'bg-emerald-500/20 text-emerald-400' : isSell ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}">
+                        ${s.signal}
+                    </span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-xs">
+                    <div><span class="text-slate-500">RSI:</span> <span class="${s.rsi > 70 ? 'text-red-400' : s.rsi < 30 ? 'text-emerald-400' : ''}">${s.rsi?.toFixed(1) || '--'}</span></div>
+                    <div><span class="text-slate-500">MACD:</span> <span class="${s.macd_trend === 'Bullish' ? 'text-emerald-400' : 'text-red-400'}">${s.macd_trend || '--'}</span></div>
+                    <div><span class="text-slate-500">Strength:</span> ${s.signal_strength}/5</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const content = `
+        <!-- Confluence Score -->
+        <div class="mb-6 p-4 bg-gradient-to-r ${mtf.confluence === 'Strong' ? 'from-emerald-500/20 to-green-500/20 border-emerald-500/30' : mtf.confluence === 'Conflicting' ? 'from-red-500/20 to-orange-500/20 border-red-500/30' : 'from-violet-500/20 to-purple-500/20 border-violet-500/30'} border rounded-xl">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-sm text-slate-400">Multi-Timeframe Confluence</span>
+                    <p class="text-2xl font-bold">${mtf.confluence || 'N/A'}</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-sm text-slate-400">Recommendation</span>
+                    <p class="font-semibold">${mtf.recommendation || 'No clear signal'}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Multi-Timeframe Signals -->
+        <div class="mb-6">
+            <h3 class="font-bold mb-3 flex items-center gap-2"><span>⏰</span> Timeframe Analysis</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                ${signalsHtml || '<p class="text-slate-500 col-span-full">No timeframe data available</p>'}
+            </div>
+        </div>
+        
+        <!-- Support/Resistance -->
+        <div class="mb-6">
+            <h3 class="font-bold mb-3 flex items-center gap-2"><span>🎯</span> Support & Resistance</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
+                    <span class="text-xs text-red-400 block mb-1">Resistance 2</span>
+                    <span class="font-bold text-red-400">${sr.resistance_2?.toFixed(5) || '--'}</span>
+                </div>
+                <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
+                    <span class="text-xs text-red-400 block mb-1">Resistance 1</span>
+                    <span class="font-bold text-red-400">${sr.resistance_1?.toFixed(5) || '--'}</span>
+                </div>
+                <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
+                    <span class="text-xs text-emerald-400 block mb-1">Support 1</span>
+                    <span class="font-bold text-emerald-400">${sr.support_1?.toFixed(5) || '--'}</span>
+                </div>
+                <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
+                    <span class="text-xs text-emerald-400 block mb-1">Support 2</span>
+                    <span class="font-bold text-emerald-400">${sr.support_2?.toFixed(5) || '--'}</span>
+                </div>
+            </div>
+            <div class="mt-3 text-center text-sm">
+                <span class="text-slate-400">Pivot Point: </span>
+                <span class="font-bold">${sr.pivot?.toFixed(5) || '--'}</span>
+                <span class="mx-3">|</span>
+                <span class="text-slate-400">Position: </span>
+                <span class="font-semibold ${sr.price_position === 'Near Support' ? 'text-emerald-400' : sr.price_position === 'Near Resistance' ? 'text-red-400' : ''}">${sr.price_position || '--'}</span>
+            </div>
+        </div>
+        
+        <!-- Backtest Results -->
+        <div class="mb-6">
+            <h3 class="font-bold mb-3 flex items-center gap-2"><span>📊</span> 2-Year Backtest</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="bg-white/5 rounded-xl p-3 text-center">
+                    <span class="text-xs text-slate-500 block mb-1">Win Rate</span>
+                    <span class="font-bold text-xl ${backtest.win_rate >= 50 ? 'text-emerald-400' : 'text-red-400'}">${backtest.win_rate?.toFixed(1) || '--'}%</span>
+                </div>
+                <div class="bg-white/5 rounded-xl p-3 text-center">
+                    <span class="text-xs text-slate-500 block mb-1">Total Trades</span>
+                    <span class="font-bold text-xl">${backtest.total_trades || '--'}</span>
+                </div>
+                <div class="bg-white/5 rounded-xl p-3 text-center">
+                    <span class="text-xs text-slate-500 block mb-1">Profit Factor</span>
+                    <span class="font-bold text-xl ${backtest.profit_factor >= 1 ? 'text-emerald-400' : 'text-red-400'}">${backtest.profit_factor?.toFixed(2) || '--'}</span>
+                </div>
+                <div class="bg-white/5 rounded-xl p-3 text-center">
+                    <span class="text-xs text-slate-500 block mb-1">Max Drawdown</span>
+                    <span class="font-bold text-xl text-orange-400">${backtest.max_drawdown?.toFixed(1) || '--'}%</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Calendar Warnings -->
+        ${calendar.length > 0 ? `
+            <div class="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                <h3 class="font-bold mb-2 flex items-center gap-2 text-amber-400"><span>⚠️</span> Economic Calendar Warnings</h3>
+                <ul class="text-sm space-y-1">
+                    ${calendar.map(w => `<li class="text-amber-300">• ${w}</li>`).join('')}
+                </ul>
+            </div>
+        ` : ''}
+        
+        <!-- Action Buttons -->
+        <div class="flex gap-3 justify-center">
+            <button onclick="takeTrade('${symbol}', '${mtf.recommendation || 'Signal'}', ${sr.pivot || 0})" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+                <span>⚡</span> I Took This Trade
+            </button>
+            <button onclick="openForexChart('${symbol}')" class="px-6 py-3 bg-violet-600 hover:bg-violet-500 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 shadow-lg shadow-violet-500/20">
+                <span>📈</span> View Chart
+            </button>
+            <button onclick="closeAnalysisModal()" class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-semibold text-sm transition-all">
+                Close
+            </button>
+        </div>
+    `;
+
+    const contentEl = document.getElementById('analysisModalContent');
+    if (contentEl) {
+        contentEl.innerHTML = content;
+    }
+}
+
+// ============================================
+// Economic Calendar Modal
+// ============================================
+async function showEconomicCalendarModal() {
+    showAnalysisModal('📅 Economic Calendar', '<div class="text-center py-8"><div class="animate-spin w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto mb-4"></div><p>Loading economic events...</p></div>');
+
+    try {
+        const response = await fetch('/api/analysis/calendar');
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'Failed to load calendar');
+        }
+
+        const events = data.data.events || [];
+        const highImpactCount = data.data.high_impact_count || 0;
+        const tradingWarnings = data.data.trading_warnings || [];
+
+        let eventsHtml = '';
+        if (events.length === 0) {
+            eventsHtml = '<p class="text-center text-slate-500 py-8">No high-impact events scheduled for this week</p>';
+        } else {
+            eventsHtml = events.map(event => {
+                const impactClass = event.impact === 'High' ? 'high-impact' : event.impact === 'Medium' ? 'medium-impact' : 'low-impact';
+                const impactColor = event.impact === 'High' ? 'bg-red-500/20 text-red-400' : event.impact === 'Medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400';
+
+                return `
+                    <div class="calendar-event ${impactClass} bg-white/5 rounded-xl p-4 mb-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">${event.country_flag || '🌐'}</span>
+                                <span class="font-semibold">${event.event}</span>
+                            </div>
+                            <span class="impact-badge ${event.impact?.toLowerCase()}">${event.impact}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm text-slate-400">
+                            <span>${event.date} ${event.time}</span>
+                            <span>Affects: ${event.currencies?.join(', ') || 'Multiple'}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        const content = `
+            <!-- Summary Banner -->
+            <div class="mb-6 p-4 ${highImpactCount > 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'} border rounded-xl">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">${highImpactCount > 0 ? '⚠️' : '✅'}</span>
+                    <div>
+                        <p class="font-bold">${highImpactCount} High-Impact Events This Week</p>
+                        <p class="text-sm text-slate-400">${highImpactCount > 0 ? 'Consider reducing position sizes during these events' : 'Relatively calm week ahead'}</p>
+                    </div>
+                </div>
+            </div>
+            
+            ${tradingWarnings.length > 0 ? `
+                <div class="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                    <h4 class="font-semibold text-amber-400 mb-2">⏰ Trading Warnings</h4>
+                    <ul class="text-sm text-amber-300 space-y-1">
+                        ${tradingWarnings.map(w => `<li>• ${w}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
+            <!-- Events List -->
+            <div class="mb-4">
+                <h3 class="font-bold mb-3">Upcoming Events</h3>
+                ${eventsHtml}
+            </div>
+            
+            <p class="text-center text-xs text-slate-500 mt-4">
+                ⚠️ Avoid trading during high-impact news - spreads widen and volatility increases
+            </p>
+        `;
+
+        const contentEl = document.getElementById('analysisModalContent');
+        if (contentEl) {
+            contentEl.innerHTML = content;
+        }
+
+    } catch (error) {
+        console.error('❌ Calendar error:', error);
+        const contentEl = document.getElementById('analysisModalContent');
+        if (contentEl) {
+            contentEl.innerHTML = `
+                <div class="text-center py-8">
+                    <span class="text-4xl mb-4 block">⚠️</span>
+                    <p class="text-red-400 mb-4">Failed to load calendar: ${error.message}</p>
+                    <button onclick="closeAnalysisModal()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-medium transition-all">
+                        Close
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+// ============================================
+// Forex Sessions Status Update
+// ============================================
+function updateForexSessions() {
+    const now = new Date();
+    const utcHour = now.getUTCHours();
+    const utcMinutes = now.getUTCMinutes();
+    const dayOfWeek = now.getUTCDay();
+
+    // Forex market is closed on weekends
+    const isWeekend = (dayOfWeek === 0 && utcHour < 22) || (dayOfWeek === 6) || (dayOfWeek === 5 && utcHour >= 22);
+
+    // Session times in UTC
+    const sessions = {
+        sydney: { open: 22, close: 7, element: 'sydneyStatus', card: 'sydneySession' },
+        tokyo: { open: 0, close: 9, element: 'tokyoStatus', card: 'tokyoSession' },
+        london: { open: 8, close: 17, element: 'londonStatus', card: 'londonSession' },
+        ny: { open: 13, close: 22, element: 'nyStatus', card: 'nySession' }
+    };
+
+    const openSessions = [];
+
+    Object.entries(sessions).forEach(([name, session]) => {
+        const statusEl = document.getElementById(session.element);
+        const cardEl = document.getElementById(session.card);
+
+        if (!statusEl || !cardEl) return;
+
+        let isOpen = false;
+
+        if (!isWeekend) {
+            if (session.open < session.close) {
+                // Normal session (doesn't cross midnight)
+                isOpen = utcHour >= session.open && utcHour < session.close;
+            } else {
+                // Session crosses midnight (e.g., Sydney)
+                isOpen = utcHour >= session.open || utcHour < session.close;
+            }
+        }
+
+        if (isOpen) {
+            openSessions.push(name.charAt(0).toUpperCase() + name.slice(1));
+            statusEl.textContent = 'OPEN';
+            statusEl.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400';
+            cardEl.classList.add('session-open');
+            cardEl.classList.remove('session-closed');
+        } else {
+            statusEl.textContent = isWeekend ? 'WEEKEND' : 'CLOSED';
+            statusEl.className = `px-2 py-1 text-xs font-semibold rounded-full ${isWeekend ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400'}`;
+            cardEl.classList.remove('session-open');
+            cardEl.classList.add('session-closed');
+        }
+    });
+
+    // Update session overlap banner
+    const overlapBanner = document.getElementById('sessionOverlap');
+    if (overlapBanner) {
+        if (openSessions.length >= 2) {
+            overlapBanner.classList.remove('hidden');
+            overlapBanner.innerHTML = `
+                <span class="text-lg">🔥</span>
+                <span class="text-sm font-medium">${openSessions.join(' & ')} overlap - Optimal trading conditions!</span>
+            `;
+        } else if (openSessions.length === 1) {
+            overlapBanner.classList.add('hidden');
+        } else {
+            overlapBanner.classList.add('hidden');
+        }
+    }
+}
+
+// ============================================
+// Toast Notification Helper
+// ============================================
+function showToast(message, type = 'success') {
+    let toast = document.getElementById('toast');
+
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.className = 'toast';
+        document.body.appendChild(toast);
+    }
+
+    // Use CSS spinner for loading/info, icons for success/error
+    if (type === 'info' || type === 'loading') {
+        toast.innerHTML = `<span class="toast-spinner"></span> ${message}`;
+    } else if (type === 'success') {
+        toast.innerHTML = `<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>${message}`;
+    } else if (type === 'error') {
+        toast.innerHTML = `<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>${message}`;
+    } else {
+        toast.textContent = message;
+    }
+    toast.className = `toast ${type} show`;
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3000);
+}
+
+// ============================================
+// Account Type Selection (for settings)
+// ============================================
+function selectAccountType(type, button) {
+    const currentType = localStorage.getItem('mma_account_type') || 'both';
+
+    // Update button selection visually
+    document.querySelectorAll('.account-type-btn').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    button.classList.add('selected');
+
+    // If selecting a different type, show confirmation
+    if (type !== currentType) {
+        selectedNewAccountType = type;
+        showAccountTypeConfirmation();
+    } else {
+        selectedNewAccountType = null;
+        hideAccountTypeConfirmation();
+    }
+}
+
+function showAccountTypeConfirmation() {
+    const confirmSection = document.getElementById('accountTypeConfirmation');
+    if (confirmSection) {
+        confirmSection.classList.remove('hidden');
+        // Generate new captcha
+        captchaNum1 = Math.floor(Math.random() * 9) + 1;
+        captchaNum2 = Math.floor(Math.random() * 9) + 1;
+        const captchaQuestion = document.getElementById('captchaQuestion');
+        if (captchaQuestion) {
+            captchaQuestion.textContent = `${captchaNum1} + ${captchaNum2}`;
+        }
+    }
+}
+
+function hideAccountTypeConfirmation() {
+    const confirmSection = document.getElementById('accountTypeConfirmation');
+    if (confirmSection) {
+        confirmSection.classList.add('hidden');
+    }
+}
+
+function cancelAccountTypeChange() {
+    selectedNewAccountType = null;
+    hideAccountTypeConfirmation();
+
+    // Reset button selection to current type
+    const currentType = localStorage.getItem('mma_account_type') || 'both';
+    document.querySelectorAll('.account-type-btn').forEach(btn => {
+        btn.classList.remove('selected');
+        if (btn.dataset.type === currentType) {
+            btn.classList.add('selected');
+        }
+    });
+}
+
+// ============================================
+// Initialize on DOM Ready
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Apply role-based filtering
+    applyRoleBasedFiltering();
+
+    // Initialize forex pair analyzer popular pairs
+    initForexPairAnalyzer();
+
+    // Update forex sessions every second
+    setInterval(updateForexSessions, 1000);
+    updateForexSessions();
+
+    // Load settings page when navigating to settings
+    const settingsLink = document.querySelector('[data-page="settings"]');
+    if (settingsLink) {
+        settingsLink.addEventListener('click', loadSettingsPage);
+    }
+});
+
+// ============================================
+// Expose Functions Globally
+// ============================================
+window.loadForexData = loadForexData;
+window.loadCurrencyStrength = loadCurrencyStrength;
+window.analyzeForexPair = analyzeForexPair;
+window.analyzeForexPairDirect = analyzeForexPairDirect;
+window.closeAnalysisModal = closeAnalysisModal;
+window.showEconomicCalendarModal = showEconomicCalendarModal;
+window.selectAccountType = selectAccountType;
+window.cancelAccountTypeChange = cancelAccountTypeChange;
+window.showToast = showToast;
+
+// ============================================
+// QUANTITATIVE ANALYSIS FUNCTIONS
+// ============================================
+
+// Fetch full quant analysis for a symbol
+async function fetchQuantAnalysis(symbol) {
+    try {
+        const response = await fetch(`/api/quant/full/${encodeURIComponent(symbol)}`);
+        const result = await response.json();
+        if (result.success) {
+            return result.data;
+        }
+        throw new Error(result.detail || 'Failed to fetch quant analysis');
+    } catch (error) {
+        console.error('Quant analysis error:', error);
+        return null;
+    }
+}
+
+// Display Fibonacci levels in UI
+function displayFibonacciLevels(fibonacci, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !fibonacci) return;
+
+    const trendColor = fibonacci.trend === 'uptrend' ? 'text-emerald-400' : 'text-red-400';
+    const trendIcon = fibonacci.trend === 'uptrend' ? '📈' : '📉';
+
+    container.innerHTML = `
+        <div class="bg-surface-card/50 backdrop-blur-xl border border-white/5 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-bold flex items-center gap-2">
+                    <span>📐</span> Fibonacci Levels
+                </h4>
+                <span class="px-2 py-1 rounded-lg text-xs font-medium ${fibonacci.signal === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : fibonacci.signal === 'SELL' ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}">
+                    ${fibonacci.signal}
+                </span>
+            </div>
+            
+            <div class="flex items-center gap-2 mb-3 text-sm">
+                <span>${trendIcon}</span>
+                <span class="${trendColor} font-medium">${fibonacci.trend.toUpperCase()}</span>
+                <span class="text-slate-500">|</span>
+                <span class="text-slate-400">Near ${fibonacci.nearest_level}</span>
+            </div>
+            
+            <div class="space-y-2 text-xs">
+                <div class="flex justify-between items-center">
+                    <span class="text-red-400">R3 (261.8%)</span>
+                    <span class="font-mono">${fibonacci.fib_ext_2618?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-red-400">R2 (161.8%)</span>
+                    <span class="font-mono">${fibonacci.fib_ext_1618?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-amber-400">R1 (127.2%)</span>
+                    <span class="font-mono">${fibonacci.fib_ext_1272?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center bg-violet-500/10 rounded px-2 py-1">
+                    <span class="text-violet-400 font-medium">0% (Swing)</span>
+                    <span class="font-mono">${fibonacci.fib_0?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">23.6%</span>
+                    <span class="font-mono">${fibonacci.fib_236?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center bg-amber-500/10 rounded px-2 py-1">
+                    <span class="text-amber-400 font-medium">38.2%</span>
+                    <span class="font-mono">${fibonacci.fib_382?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">50%</span>
+                    <span class="font-mono">${fibonacci.fib_50?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center bg-emerald-500/10 rounded px-2 py-1">
+                    <span class="text-emerald-400 font-medium">61.8% (Golden)</span>
+                    <span class="font-mono">${fibonacci.fib_618?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">78.6%</span>
+                    <span class="font-mono">${fibonacci.fib_786?.toFixed(5) || '-'}</span>
+                </div>
+                <div class="flex justify-between items-center bg-violet-500/10 rounded px-2 py-1">
+                    <span class="text-violet-400 font-medium">100% (Swing)</span>
+                    <span class="font-mono">${fibonacci.fib_100?.toFixed(5) || '-'}</span>
+                </div>
+            </div>
+            
+            <p class="text-xs text-slate-400 mt-3 leading-relaxed">${fibonacci.recommendation}</p>
+        </div>
+    `;
+}
+
+// Display Bollinger Bands in UI
+function displayBollingerBands(bollinger, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !bollinger) return;
+
+    const signalColor = {
+        'STRONG_BUY': 'bg-emerald-500/20 text-emerald-400',
+        'BUY': 'bg-emerald-500/20 text-emerald-400',
+        'NEUTRAL': 'bg-slate-500/20 text-slate-400',
+        'SELL': 'bg-red-500/20 text-red-400',
+        'STRONG_SELL': 'bg-red-500/20 text-red-400'
+    }[bollinger.signal] || 'bg-slate-500/20 text-slate-400';
+
+    const volatilityColor = {
+        'extreme': 'text-red-400',
+        'high': 'text-amber-400',
+        'normal': 'text-slate-400',
+        'low': 'text-sky-400'
+    }[bollinger.volatility] || 'text-slate-400';
+
+    // Calculate %B position for visual bar
+    const percentB = Math.max(0, Math.min(100, bollinger.percent_b * 100));
+
+    container.innerHTML = `
+        <div class="bg-surface-card/50 backdrop-blur-xl border border-white/5 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-bold flex items-center gap-2">
+                    <span>📊</span> Bollinger Bands
+                </h4>
+                <span class="px-2 py-1 rounded-lg text-xs font-medium ${signalColor}">
+                    ${bollinger.signal.replace('_', ' ')}
+                </span>
+            </div>
+            
+            ${bollinger.is_squeeze ? `
+                <div class="bg-amber-500/20 border border-amber-500/30 rounded-lg p-2 mb-3 flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span class="text-amber-400 text-xs font-medium">SQUEEZE DETECTED (${bollinger.squeeze_intensity}) - Breakout imminent!</span>
+                </div>
+            ` : ''}
+            
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between items-center">
+                    <span class="text-red-400">Upper Band</span>
+                    <span class="font-mono">${bollinger.upper_band?.toFixed(5)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">Middle (SMA20)</span>
+                    <span class="font-mono">${bollinger.middle_band?.toFixed(5)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-emerald-400">Lower Band</span>
+                    <span class="font-mono">${bollinger.lower_band?.toFixed(5)}</span>
+                </div>
+            </div>
+            
+            <!-- %B Visual Bar -->
+            <div class="mt-4">
+                <div class="flex justify-between text-xs text-slate-500 mb-1">
+                    <span>Oversold</span>
+                    <span>%B: ${(bollinger.percent_b * 100).toFixed(1)}%</span>
+                    <span>Overbought</span>
+                </div>
+                <div class="h-3 bg-slate-700 rounded-full relative overflow-hidden">
+                    <div class="absolute inset-0 flex">
+                        <div class="w-1/5 bg-emerald-500/30"></div>
+                        <div class="w-3/5 bg-slate-600/30"></div>
+                        <div class="w-1/5 bg-red-500/30"></div>
+                    </div>
+                    <div class="absolute top-0 h-full w-2 bg-white rounded-full shadow-lg transition-all" 
+                         style="left: calc(${percentB}% - 4px)"></div>
+                </div>
+            </div>
+            
+            <div class="flex justify-between mt-3 text-xs">
+                <div>
+                    <span class="text-slate-500">Bandwidth:</span>
+                    <span class="${volatilityColor} font-medium ml-1">${bollinger.bandwidth?.toFixed(2)}%</span>
+                </div>
+                <div>
+                    <span class="text-slate-500">Volatility:</span>
+                    <span class="${volatilityColor} font-medium ml-1">${bollinger.volatility?.toUpperCase()}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Display Mean Reversion in UI
+function displayMeanReversion(mr, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !mr) return;
+
+    const signalColor = {
+        'STRONG_BUY': 'bg-emerald-500/20 text-emerald-400',
+        'BUY': 'bg-emerald-500/20 text-emerald-400',
+        'NEUTRAL': 'bg-slate-500/20 text-slate-400',
+        'SELL': 'bg-red-500/20 text-red-400',
+        'STRONG_SELL': 'bg-red-500/20 text-red-400'
+    }[mr.signal] || 'bg-slate-500/20 text-slate-400';
+
+    const zscoreColor = mr.zscore > 2 ? 'text-red-400' : mr.zscore < -2 ? 'text-emerald-400' : 'text-slate-400';
+    const zscorePosition = Math.max(0, Math.min(100, (mr.zscore + 3) / 6 * 100));
+
+    container.innerHTML = `
+        <div class="bg-surface-card/50 backdrop-blur-xl border border-white/5 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-bold flex items-center gap-2">
+                    <span>🔄</span> Mean Reversion
+                </h4>
+                <span class="px-2 py-1 rounded-lg text-xs font-medium ${signalColor}">
+                    ${mr.signal.replace('_', ' ')}
+                </span>
+            </div>
+            
+            ${mr.rsi_divergence ? `
+                <div class="bg-violet-500/20 border border-violet-500/30 rounded-lg p-2 mb-3 flex items-center gap-2">
+                    <span>${mr.rsi_divergence === 'bullish_divergence' ? '📈' : '📉'}</span>
+                    <span class="text-violet-400 text-xs font-medium">${mr.rsi_divergence.replace('_', ' ').toUpperCase()} detected!</span>
+                </div>
+            ` : ''}
+            
+            <!-- Z-Score Visual -->
+            <div class="mb-4">
+                <div class="flex justify-between text-xs text-slate-500 mb-1">
+                    <span>Oversold (-3σ)</span>
+                    <span class="${zscoreColor} font-medium">Z: ${mr.zscore?.toFixed(2)}</span>
+                    <span>Overbought (+3σ)</span>
+                </div>
+                <div class="h-3 bg-slate-700 rounded-full relative overflow-hidden">
+                    <div class="absolute inset-0 flex">
+                        <div class="w-1/6 bg-emerald-500/40"></div>
+                        <div class="w-1/6 bg-emerald-500/20"></div>
+                        <div class="w-2/6 bg-slate-600/30"></div>
+                        <div class="w-1/6 bg-red-500/20"></div>
+                        <div class="w-1/6 bg-red-500/40"></div>
+                    </div>
+                    <div class="absolute top-0 h-full w-2 bg-white rounded-full shadow-lg transition-all" 
+                         style="left: calc(${zscorePosition}% - 4px)"></div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <div class="bg-slate-800/50 rounded-lg p-2">
+                    <div class="text-slate-500 text-xs">Deviation SMA20</div>
+                    <div class="font-bold ${mr.deviation_sma20_pct > 0 ? 'text-red-400' : 'text-emerald-400'}">
+                        ${mr.deviation_sma20_pct > 0 ? '+' : ''}${mr.deviation_sma20_pct?.toFixed(2)}%
+                    </div>
+                </div>
+                <div class="bg-slate-800/50 rounded-lg p-2">
+                    <div class="text-slate-500 text-xs">Half-Life</div>
+                    <div class="font-bold">${mr.half_life_days ? mr.half_life_days + ' days' : 'N/A'}</div>
+                </div>
+                <div class="bg-slate-800/50 rounded-lg p-2">
+                    <div class="text-slate-500 text-xs">Reversion Prob</div>
+                    <div class="font-bold text-violet-400">${mr.reversion_probability}%</div>
+                </div>
+                <div class="bg-slate-800/50 rounded-lg p-2">
+                    <div class="text-slate-500 text-xs">RSI</div>
+                    <div class="font-bold ${mr.rsi > 70 ? 'text-red-400' : mr.rsi < 30 ? 'text-emerald-400' : ''}">${mr.rsi?.toFixed(1)}</div>
+                </div>
+            </div>
+            
+            <div class="mt-3 px-2 py-1 bg-slate-800/50 rounded text-xs">
+                <span class="text-slate-500">Confidence:</span>
+                <span class="ml-1 font-medium ${mr.confidence === 'high' ? 'text-emerald-400' : mr.confidence === 'medium' ? 'text-amber-400' : 'text-slate-400'}">
+                    ${mr.confidence?.toUpperCase()}
+                </span>
+            </div>
+        </div>
+    `;
+}
+
+// Display Monte Carlo Simulation in UI
+function displayMonteCarlo(mc, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !mc) return;
+
+    const bullish = mc.prob_above_current > 55;
+    const bearish = mc.prob_above_current < 45;
+
+    container.innerHTML = `
+        <div class="bg-surface-card/50 backdrop-blur-xl border border-white/5 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-bold flex items-center gap-2">
+                    <span>🎲</span> Monte Carlo (${mc.simulation_days}d)
+                </h4>
+                <span class="px-2 py-1 rounded-lg text-xs font-medium ${bullish ? 'bg-emerald-500/20 text-emerald-400' : bearish ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}">
+                    ${mc.prob_above_current?.toFixed(0)}% Bullish
+                </span>
+            </div>
+            
+            <!-- Price Distribution Visual -->
+            <div class="relative h-16 mb-4 bg-slate-800/50 rounded-lg overflow-hidden">
+                <div class="absolute inset-0 flex items-end px-2">
+                    <!-- 5th percentile -->
+                    <div class="flex-1 flex flex-col items-center">
+                        <div class="w-full bg-red-500/30 rounded-t" style="height: 20%"></div>
+                        <span class="text-[10px] text-red-400 mt-1">${mc.percentile_5?.toFixed(2)}</span>
+                    </div>
+                    <!-- 25th percentile -->
+                    <div class="flex-1 flex flex-col items-center">
+                        <div class="w-full bg-amber-500/30 rounded-t" style="height: 40%"></div>
+                        <span class="text-[10px] text-amber-400 mt-1">${mc.percentile_25?.toFixed(2)}</span>
+                    </div>
+                    <!-- Mean -->
+                    <div class="flex-1 flex flex-col items-center">
+                        <div class="w-full bg-violet-500/50 rounded-t" style="height: 70%"></div>
+                        <span class="text-[10px] text-violet-400 mt-1 font-bold">${mc.mean_price?.toFixed(2)}</span>
+                    </div>
+                    <!-- 75th percentile -->
+                    <div class="flex-1 flex flex-col items-center">
+                        <div class="w-full bg-emerald-500/30 rounded-t" style="height: 40%"></div>
+                        <span class="text-[10px] text-emerald-400 mt-1">${mc.percentile_75?.toFixed(2)}</span>
+                    </div>
+                    <!-- 95th percentile -->
+                    <div class="flex-1 flex flex-col items-center">
+                        <div class="w-full bg-emerald-500/30 rounded-t" style="height: 20%"></div>
+                        <span class="text-[10px] text-emerald-400 mt-1">${mc.percentile_95?.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-2 text-xs">
+                <div class="bg-slate-800/50 rounded-lg p-2 text-center">
+                    <div class="text-slate-500">Expected</div>
+                    <div class="font-bold ${mc.expected_return_pct > 0 ? 'text-emerald-400' : 'text-red-400'}">
+                        ${mc.expected_return_pct > 0 ? '+' : ''}${mc.expected_return_pct?.toFixed(2)}%
+                    </div>
+                </div>
+                <div class="bg-slate-800/50 rounded-lg p-2 text-center">
+                    <div class="text-slate-500">VaR (95%)</div>
+                    <div class="font-bold text-red-400">-${Math.abs(mc.var_95)?.toFixed(2)}</div>
+                </div>
+                <div class="bg-slate-800/50 rounded-lg p-2 text-center">
+                    <div class="text-slate-500">Sharpe</div>
+                    <div class="font-bold ${mc.sharpe_estimate > 1 ? 'text-emerald-400' : mc.sharpe_estimate > 0 ? 'text-amber-400' : 'text-red-400'}">
+                        ${mc.sharpe_estimate?.toFixed(2)}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
+                <div class="flex justify-between bg-emerald-500/10 rounded px-2 py-1">
+                    <span class="text-slate-400">+10% Prob:</span>
+                    <span class="text-emerald-400 font-medium">${mc.prob_gain_10_pct?.toFixed(1)}%</span>
+                </div>
+                <div class="flex justify-between bg-red-500/10 rounded px-2 py-1">
+                    <span class="text-slate-400">-10% Prob:</span>
+                    <span class="text-red-400 font-medium">${mc.prob_loss_10_pct?.toFixed(1)}%</span>
+                </div>
+            </div>
+            
+            <p class="text-xs text-slate-400 mt-3 leading-relaxed">${mc.recommendation}</p>
+        </div>
+    `;
+}
+
+// Display combined quant analysis summary
+function displayQuantSummary(data, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !data) return;
+
+    const signalColors = {
+        'STRONG_BUY': { bg: 'bg-emerald-500', text: 'text-white', glow: 'shadow-emerald-500/50' },
+        'BUY': { bg: 'bg-emerald-500/80', text: 'text-white', glow: 'shadow-emerald-500/30' },
+        'NEUTRAL': { bg: 'bg-slate-500', text: 'text-white', glow: '' },
+        'SELL': { bg: 'bg-red-500/80', text: 'text-white', glow: 'shadow-red-500/30' },
+        'STRONG_SELL': { bg: 'bg-red-500', text: 'text-white', glow: 'shadow-red-500/50' }
+    };
+    const colors = signalColors[data.combined_signal] || signalColors['NEUTRAL'];
+
+    container.innerHTML = `
+        <div class="bg-gradient-to-br from-violet-900/30 to-indigo-900/30 border border-violet-500/20 rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                    <span>🧠</span> AI Quant Analysis
+                </h3>
+                <span class="text-xs text-slate-500">${data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : ''}</span>
+            </div>
+            
+            <!-- Combined Signal Badge -->
+            <div class="flex items-center gap-4 mb-6">
+                <div class="${colors.bg} ${colors.glow} shadow-lg px-6 py-3 rounded-xl">
+                    <div class="text-xs ${colors.text} opacity-80">Combined Signal</div>
+                    <div class="text-2xl font-bold ${colors.text}">${data.combined_signal?.replace('_', ' ')}</div>
+                </div>
+                
+                <div class="flex-1">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm text-slate-400">Strength</span>
+                        <span class="font-bold">${data.combined_strength}/10</span>
+                    </div>
+                    <div class="h-3 bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full ${colors.bg} rounded-full transition-all" style="width: ${data.combined_strength * 10}%"></div>
+                    </div>
+                    <div class="text-right text-xs mt-1">
+                        <span class="text-slate-500">Confidence:</span>
+                        <span class="${data.confidence_level === 'high' ? 'text-emerald-400' : data.confidence_level === 'medium' ? 'text-amber-400' : 'text-slate-400'} font-medium ml-1">
+                            ${data.confidence_level?.toUpperCase()}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Individual Signals Grid -->
+            <div class="grid grid-cols-4 gap-2 mb-4">
+                <div class="bg-slate-800/50 rounded-lg p-2 text-center">
+                    <div class="text-lg mb-1">📐</div>
+                    <div class="text-[10px] text-slate-500">Fibonacci</div>
+                    <div class="text-xs font-bold">${data.fibonacci?.signal || '-'}</div>
+                </div>
+                <div class="bg-slate-800/50 rounded-lg p-2 text-center">
+                    <div class="text-lg mb-1">📊</div>
+                    <div class="text-[10px] text-slate-500">Bollinger</div>
+                    <div class="text-xs font-bold">${data.bollinger?.signal?.replace('_', ' ') || '-'}</div>
+                </div>
+                <div class="bg-slate-800/50 rounded-lg p-2 text-center">
+                    <div class="text-lg mb-1">🔄</div>
+                    <div class="text-[10px] text-slate-500">Mean Rev</div>
+                    <div class="text-xs font-bold">${data.mean_reversion?.signal?.replace('_', ' ') || '-'}</div>
+                </div>
+                <div class="bg-slate-800/50 rounded-lg p-2 text-center">
+                    <div class="text-lg mb-1">🎲</div>
+                    <div class="text-[10px] text-slate-500">Monte Carlo</div>
+                    <div class="text-xs font-bold ${data.monte_carlo?.prob_above_current > 55 ? 'text-emerald-400' : data.monte_carlo?.prob_above_current < 45 ? 'text-red-400' : ''}">${data.monte_carlo?.prob_above_current?.toFixed(0)}%</div>
+                </div>
+            </div>
+            
+            <p class="text-sm text-slate-300 leading-relaxed">${data.recommendation || ''}</p>
+        </div>
+    `;
+}
+
+// Full quant analysis modal
+async function showQuantAnalysisModal(symbol) {
+    showToast('Loading quant analysis...', 'info');
+
+    const data = await fetchQuantAnalysis(symbol);
+    if (!data) {
+        showToast('Failed to load quant analysis', 'error');
+        return;
+    }
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.id = 'quantModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeQuantModal()"></div>
+        <div class="relative bg-surface-card border border-white/10 rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+            <div class="sticky top-0 bg-surface-card/95 backdrop-blur-xl border-b border-white/10 p-4 flex items-center justify-between z-10">
+                <h2 class="text-xl font-bold flex items-center gap-3">
+                    <span>🧠</span>
+                    <span>Quant Analysis: ${symbol}</span>
+                </h2>
+                <button onclick="closeQuantModal()" class="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-6">
+                <!-- Summary -->
+                <div id="quantSummarySection"></div>
+                
+                <!-- Detailed Analysis Grid -->
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div id="fibonacciSection"></div>
+                    <div id="bollingerSection"></div>
+                    <div id="meanReversionSection"></div>
+                    <div id="monteCarloSection"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    // Populate sections
+    displayQuantSummary(data, 'quantSummarySection');
+    displayFibonacciLevels(data.fibonacci, 'fibonacciSection');
+    displayBollingerBands(data.bollinger, 'bollingerSection');
+    displayMeanReversion(data.mean_reversion, 'meanReversionSection');
+    displayMonteCarlo(data.monte_carlo, 'monteCarloSection');
+}
+
+function closeQuantModal() {
+    const modal = document.getElementById('quantModal');
+    if (modal) {
+        modal.remove();
+        document.body.style.overflow = '';
+    }
+}
+
+// Enhanced pair analysis with quant data
+async function enhancedPairAnalysis(symbol) {
+    try {
+        // Fetch both regular and quant analysis in parallel
+        const [regularResponse, quantData] = await Promise.all([
+            fetch(`/api/analysis/full/${encodeURIComponent(symbol)}`).then(r => r.json()),
+            fetchQuantAnalysis(symbol)
+        ]);
+
+        return {
+            regular: regularResponse.success ? regularResponse : null,
+            quant: quantData
+        };
+    } catch (error) {
+        console.error('Enhanced analysis error:', error);
+        return { regular: null, quant: null };
+    }
+}
+
+// Stock search with quant analysis
+async function searchStockWithQuant(symbol) {
+    showToast(`Analyzing ${symbol}...`, 'info');
+
+    try {
+        const [stockResponse, quantData] = await Promise.all([
+            fetch(`/api/stock/full/${encodeURIComponent(symbol)}`).then(r => r.json()),
+            fetchQuantAnalysis(symbol)
+        ]);
+
+        if (!stockResponse.success) {
+            showToast(`Stock ${symbol} not found`, 'error');
+            return;
+        }
+
+        // Show combined modal
+        showStockQuantModal(stockResponse, quantData);
+
+    } catch (error) {
+        showToast('Analysis failed: ' + error.message, 'error');
+    }
+}
+
+function showStockQuantModal(stockData, quantData) {
+    const stock = stockData.stock_data;
+
+    const modal = document.createElement('div');
+    modal.id = 'stockQuantModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeStockQuantModal()"></div>
+        <div class="relative bg-surface-card border border-white/10 rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+            <div class="sticky top-0 bg-surface-card/95 backdrop-blur-xl border-b border-white/10 p-4 z-10">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-violet-500/20 rounded-xl flex items-center justify-center">
+                            <span class="text-2xl">📈</span>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold">${stock.symbol} - ${stock.name}</h2>
+                            <div class="flex items-center gap-3 text-sm">
+                                <span class="font-mono text-lg">$${stock.price?.toFixed(2)}</span>
+                                <span class="${stock.change_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}">
+                                    ${stock.change_pct >= 0 ? '+' : ''}${stock.change_pct?.toFixed(2)}%
+                                </span>
+                                ${stock.sector ? `<span class="text-slate-500">| ${stock.sector}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="closeStockQuantModal()" class="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="p-6 space-y-6">
+                <!-- Quant Summary -->
+                ${quantData ? `<div id="stockQuantSummary"></div>` : ''}
+                
+                <!-- Technical Signal -->
+                <div class="bg-surface-hover/50 rounded-xl p-4">
+                    <h3 class="font-bold mb-3 flex items-center gap-2"><span>📊</span> Technical Analysis</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div class="bg-slate-800/50 rounded-lg p-3">
+                            <div class="text-slate-500">RSI (14)</div>
+                            <div class="font-bold text-lg ${stock.technicals?.rsi > 70 ? 'text-red-400' : stock.technicals?.rsi < 30 ? 'text-emerald-400' : ''}">${stock.technicals?.rsi?.toFixed(1) || '-'}</div>
+                        </div>
+                        <div class="bg-slate-800/50 rounded-lg p-3">
+                            <div class="text-slate-500">MACD</div>
+                            <div class="font-bold ${stock.technicals?.macd_trend === 'bullish' ? 'text-emerald-400' : 'text-red-400'}">${stock.technicals?.macd_trend?.toUpperCase() || '-'}</div>
+                        </div>
+                        <div class="bg-slate-800/50 rounded-lg p-3">
+                            <div class="text-slate-500">Signal</div>
+                            <div class="font-bold">${stock.technicals?.signal || '-'}</div>
+                        </div>
+                        <div class="bg-slate-800/50 rounded-lg p-3">
+                            <div class="text-slate-500">Strength</div>
+                            <div class="font-bold">${stock.technicals?.signal_strength || '-'}/5</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quant Details -->
+                ${quantData ? `
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div id="stockFibonacci"></div>
+                        <div id="stockBollinger"></div>
+                        <div id="stockMeanReversion"></div>
+                        <div id="stockMonteCarlo"></div>
+                    </div>
+                ` : ''}
+                
+                <!-- Recommendation -->
+                <div class="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4">
+                    <h3 class="font-bold mb-2">📋 Recommendation</h3>
+                    <p class="text-slate-300">${stock.recommendation || stock.analysis || 'No recommendation available'}</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    // Populate quant sections if available
+    if (quantData) {
+        displayQuantSummary(quantData, 'stockQuantSummary');
+        displayFibonacciLevels(quantData.fibonacci, 'stockFibonacci');
+        displayBollingerBands(quantData.bollinger, 'stockBollinger');
+        displayMeanReversion(quantData.mean_reversion, 'stockMeanReversion');
+        displayMonteCarlo(quantData.monte_carlo, 'stockMonteCarlo');
+    }
+}
+
+function closeStockQuantModal() {
+    const modal = document.getElementById('stockQuantModal');
+    if (modal) {
+        modal.remove();
+        document.body.style.overflow = '';
+    }
+}
+
+// Expose quant functions globally
+window.fetchQuantAnalysis = fetchQuantAnalysis;
+window.showQuantAnalysisModal = showQuantAnalysisModal;
+window.closeQuantModal = closeQuantModal;
+window.searchStockWithQuant = searchStockWithQuant;
+window.closeStockQuantModal = closeStockQuantModal;
+window.displayFibonacciLevels = displayFibonacciLevels;
+window.displayBollingerBands = displayBollingerBands;
+window.displayMeanReversion = displayMeanReversion;
+window.displayMonteCarlo = displayMonteCarlo;
+window.displayQuantSummary = displayQuantSummary;
+
+// Quick quant analysis from input field
+function runQuickQuantAnalysis() {
+    const input = document.getElementById('quantSymbolInput');
+    let symbol = input ? input.value.trim().toUpperCase() : '';
+
+    if (!symbol) {
+        symbol = 'AAPL'; // Default to AAPL
+    }
+
+    // Normalize forex symbols
+    if (symbol.includes('/')) {
+        symbol = symbol.replace('/', '') + '=X';
+    }
+
+    showQuantAnalysisModal(symbol);
+}
+
+// Show individual quant tool modal
+async function showQuantToolModal(tool) {
+    const input = document.getElementById('quantSymbolInput');
+    let symbol = input ? input.value.trim().toUpperCase() : 'AAPL';
+
+    // Normalize forex symbols
+    if (symbol.includes('/')) {
+        symbol = symbol.replace('/', '') + '=X';
+    }
+
+    showToast(`Loading ${tool} analysis for ${symbol}...`, 'info');
+
+    try {
+        let endpoint = '';
+        let title = '';
+        let displayFn = null;
+
+        switch (tool) {
+            case 'fibonacci':
+                endpoint = `/api/quant/fibonacci/${encodeURIComponent(symbol)}`;
+                title = `📐 Fibonacci Analysis - ${symbol}`;
+                displayFn = displayFibonacciLevels;
+                break;
+            case 'bollinger':
+                endpoint = `/api/quant/bollinger/${encodeURIComponent(symbol)}`;
+                title = `📊 Bollinger Bands - ${symbol}`;
+                displayFn = displayBollingerBands;
+                break;
+            case 'meanreversion':
+                endpoint = `/api/quant/mean-reversion/${encodeURIComponent(symbol)}`;
+                title = `🔄 Mean Reversion - ${symbol}`;
+                displayFn = displayMeanReversion;
+                break;
+            case 'montecarlo':
+                endpoint = `/api/quant/monte-carlo/${encodeURIComponent(symbol)}`;
+                title = `🎲 Monte Carlo Simulation - ${symbol}`;
+                displayFn = displayMonteCarlo;
+                break;
+            default:
+                showQuantAnalysisModal(symbol);
+                return;
+        }
+
+        const response = await fetch(endpoint);
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.detail || 'Analysis failed');
+        }
+
+        // Create modal
+        const modal = document.createElement('div');
+        modal.id = 'singleQuantModal';
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+        modal.innerHTML = `
+            <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeSingleQuantModal()"></div>
+            <div class="relative bg-surface-card border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 bg-surface-card/95 backdrop-blur-xl border-b border-white/10 p-4 flex items-center justify-between z-10">
+                    <h2 class="text-lg font-bold">${title}</h2>
+                    <button onclick="closeSingleQuantModal()" class="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="p-4" id="singleQuantContent"></div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+
+        // Display the data
+        displayFn(result.data, 'singleQuantContent');
+
+    } catch (error) {
+        showToast('Analysis failed: ' + error.message, 'error');
+    }
+}
+
+function closeSingleQuantModal() {
+    const modal = document.getElementById('singleQuantModal');
+    if (modal) {
+        modal.remove();
+        document.body.style.overflow = '';
+    }
+}
+
+// Expose new functions globally
+window.runQuickQuantAnalysis = runQuickQuantAnalysis;
+window.showQuantToolModal = showQuantToolModal;
+window.closeSingleQuantModal = closeSingleQuantModal;
+
+
+// ============================================
+// Signal Recording & Trading Functions
+// ============================================
+
+// Record signals to backend automagically
+async function recordForexSignals(pairs) {
+    if (!pairs || !Array.isArray(pairs)) return;
+
+    // Process in chunks to avoid overwhelming the server/browser
+    const interestingPairs = pairs.filter(p =>
+        p.technicals && (p.technicals.signal_strength >= 4 || p.technicals.signal_strength <= 2)
+    );
+
+    for (const pair of interestingPairs) {
+        try {
+            const isBuy = pair.technicals.signal.includes('Buy');
+            const strength = pair.technicals.signal_strength || (isBuy ? 5 : 1);
+
+            // Fire and forget - don't await response to keep UI snappy
+            fetch('/api/signals/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    symbol: pair.symbol,
+                    pair_name: pair.name,
+                    category: 'forex',
+                    signal: pair.technicals.signal,
+                    signal_strength: strength,
+                    price: pair.price,
+                    rsi: pair.technicals.rsi,
+                    macd_trend: pair.technicals.macd_trend,
+                    analysis: pair.analysis
+                })
+            }).catch(err => console.error('Signal record error:', err));
+
+        } catch (e) {
+            console.error('Failed to record signal:', e);
+        }
+    }
+}
+
+// Display top signal in the dashboard
+function displayTopSignal(pairs) {
+    const signalContainer = document.getElementById('topSignalContainer');
+    if (!signalContainer || !pairs || pairs.length === 0) return;
+
+    // Find the strongest signal
+    const sortedPairs = [...pairs].sort((a, b) => {
+        const strA = a.technicals?.signal_strength || 0;
+        const strB = b.technicals?.signal_strength || 0;
+        // Prioritize strength 5 and 1 (strong buy/sell)
+        const scoreA = strA === 5 || strA === 1 ? 10 : 0;
+        const scoreB = strB === 5 || strB === 1 ? 10 : 0;
+        return scoreB - scoreA;
+    });
+
+    const best = sortedPairs[0];
+    if (!best || !best.technicals) return;
+
+    const isBuy = best.technicals.signal.includes('Buy');
+
+    // Auto-update the "Active Signals" card if it exists
+    const activeSignalsGrid = document.getElementById('activeSignalsGrid');
+    if (activeSignalsGrid) {
+        activeSignalsGrid.innerHTML = `
+            <div class="bg-surface-card/50 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden group cursor-pointer"
+                 onclick="analyzeForexPairDirect('${best.symbol}')">
+                <div class="absolute top-0 right-0 p-4 opacity-50 text-6xl transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
+                    ${isBuy ? '📈' : '📉'}
+                </div>
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold">${best.symbol}</h3>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold ${isBuy ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}">
+                            ${best.technicals.signal}
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <p class="text-slate-500 text-xs">Price</p>
+                            <p class="font-mono font-bold">${best.price}</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs">RSI</p>
+                            <p class="font-mono ${best.technicals.rsi > 70 ? 'text-red-400' : best.technicals.rsi < 30 ? 'text-emerald-400' : 'text-slate-300'}">${best.technicals.rsi.toFixed(1)}</p>
+                        </div>
+                    </div>
+                    <button class="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-all">
+                        View Analysis
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// User Action: Take Trade
+async function takeTrade(symbol, signal, price) {
+    showToast('Recording trade...', 'info');
+
+    try {
+        const response = await fetch('/api/telegram/trade-taken', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symbol: symbol,
+                signal: signal,
+                price: parseFloat(price)
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Trade recorded! Telegram alert sent.', 'success');
+        } else {
+            showToast('Failed to send alert: ' + data.message, 'error');
+        }
+    } catch (error) {
+        console.error('Trade record error:', error);
+        showToast('Error recording trade', 'error');
+    }
+}
+
+// Expose functions specially
+window.recordForexSignals = recordForexSignals;
+window.displayTopSignal = displayTopSignal;
+window.takeTrade = takeTrade;

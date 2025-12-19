@@ -9,3 +9,6 @@ jinja2
 beautifulsoup4
 lxml
 openai
+supabase
+python-jose[cryptography]
+passlib[bcrypt]

@@ -1,16 +1,25 @@
 # Environment variables
 .env
 
-# Python
+# Virtual environment
 venv/
+env/
+.venv/
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
-*.egg-info/
+
+# Distribution / packaging
 dist/
 build/
+*.egg-info/
 .eggs/
 
 # IDE
@@ -19,7 +28,7 @@ build/
 *.swp
 *.swo
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 

@@ -1,48 +1,67 @@
-# Daily AI Stock Intelligence System
+# 💹 Money Market Intelligence
 
-A production-ready, automated stock intelligence system that fetches daily market data, analyzes it using Google Gemini AI, and sends actionable insights via Email.
+A comprehensive, AI-powered market intelligence system that provides real-time analysis of US stocks, Nigerian stocks (NGX), Forex pairs, and commodities. Built with FastAPI and Google Gemini AI.
 
-![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.124+-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## 🚀 Features
 
-- **Real-time Market Data**: Fetches live data from Yahoo Finance (yfinance)
-- **AI-Powered Analysis**: Uses Google Gemini to generate actionable insights
-- **Beautiful Dashboard**: Modern dark-mode UI for manual report generation
-- **Email Reports**: Automated HTML email reports with market summaries
-- **Automation Ready**: Standalone script for cron jobs / task scheduler
-- **API-First**: RESTful API endpoints for integration
+### Markets Covered
+- **US Stocks** - Real-time data from Yahoo Finance with AI-powered analysis
+- **Nigerian Stocks (NGX)** - Local market data and insights
+- **Forex Trading** - Major pairs, Naira pairs, and cross currencies
+- **Commodities** - Gold (XAU/USD), Oil (CL=F), and more
+
+### Key Capabilities
+- **🤖 AI-Powered Analysis** - Google Gemini generates actionable market insights and strategies
+- **📊 Multi-Timeframe Analysis** - 1H, 4H, and Daily timeframe confluence signals
+- **📈 Technical Indicators** - RSI, MACD, SMA 20/50/200, Fibonacci levels
+- **🎯 Trading Signals** - Automated Buy/Sell signals with strength ratings
+- **💡 Support/Resistance Levels** - Dynamic pivot points, S1/S2, R1/R2
+- **📅 Economic Calendar** - High-impact event warnings (NFP, FOMC, CPI)
+- **📉 Backtesting** - Historical signal performance analysis
+- **📧 Email Reports** - Automated HTML reports with market summaries
+- **📱 Telegram Alerts** - Real-time signal notifications
+- **📰 Market News** - Curated news with AI sentiment analysis
 
 ## 📁 Project Structure
 
 ```
-daily_stock_intel/
+MMA---Money-Market-Analysis/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py              # FastAPI Entry Point
-│   ├── core/
-│   │   └── config.py        # Settings management
-│   ├── models/
-│   │   └── schemas.py       # Pydantic models
-│   ├── services/
-│   │   ├── market_data.py   # Yahoo Finance logic
-│   │   ├── llm_analyst.py   # Gemini AI logic
-│   │   └── notifier.py      # Email dispatch
+│   ├── main.py                  # FastAPI Entry Point
 │   ├── api/
-│   │   └── endpoints.py     # API Routes
-│   └── static/              # Frontend Assets
+│   │   └── endpoints.py         # All API Routes
+│   ├── core/
+│   │   └── config.py            # Settings management
+│   ├── models/
+│   │   └── schemas.py           # Pydantic models
+│   ├── services/
+│   │   ├── market_data.py       # US market data (Yahoo Finance)
+│   │   ├── nigerian_market.py   # NGX market data
+│   │   ├── forex_service.py     # Forex pairs & commodities
+│   │   ├── llm_analyst.py       # Gemini AI analysis
+│   │   ├── news_service.py      # Market news aggregation
+│   │   ├── signal_service.py    # Trading signal tracking
+│   │   ├── advanced_analysis.py # MTF, S/R, Calendar, Backtest
+│   │   ├── stock_analysis.py    # Individual stock analysis
+│   │   └── notifier.py          # Email dispatch
+│   └── static/                  # Frontend Dashboard
 │       ├── index.html
 │       ├── style.css
 │       └── app.js
 ├── scripts/
-│   └── run_daily_scan.py    # Cron automation script
-├── tests/
-├── .env                     # Environment variables (create from .env.example)
-├── .env.example             # Template for environment variables
+│   └── run_daily_scan.py        # Automation script
+├── data/
+│   └── signals_history.json     # Signal tracking data
+├── .env                         # Environment variables
+├── .env.example                 # Template for env vars
+├── .gitignore
 ├── requirements.txt
-├── Procfile                 # Railway/Heroku deployment
+├── Procfile                     # Railway/Heroku deployment
 └── README.md
 ```
 
@@ -52,13 +71,16 @@ daily_stock_intel/
 
 ```bash
 # Clone repository
-git clone <repository-url>
-cd daily_stock_intel
+git clone https://github.com/Phusse/MMA---Money-Market-Analysis.git
+cd MMA---Money-Market-Analysis
 
 # Create virtual environment
 python -m venv venv
 
-# Activate (Windows)
+# Activate (Windows - Git Bash)
+source venv/Scripts/activate
+
+# Activate (Windows - CMD)
 venv\Scripts\activate
 
 # Activate (Linux/Mac)
@@ -75,51 +97,105 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # Edit .env with your credentials
-# Required: GEMINI_API_KEY, EMAIL_ADDRESS, EMAIL_PASSWORD, RECIPIENT_EMAIL
 ```
 
-#### Getting API Keys
+#### Required API Keys
 
-**Gemini API Key:**
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Create a new API key
-3. Add to `.env` as `GEMINI_API_KEY`
-
-**Gmail App Password:**
-1. Enable 2-Factor Authentication on your Google account
-2. Go to [App Passwords](https://myaccount.google.com/apppasswords)
-3. Create a new app password for "Mail"
-4. Add to `.env` as `EMAIL_PASSWORD`
+| Key | Description | How to Get |
+|-----|-------------|------------|
+| `GEMINI_API_KEY` | Google AI analysis | [Google AI Studio](https://makersuite.google.com/app/apikey) |
+| `EMAIL_ADDRESS` | Sender email | Your Gmail address |
+| `EMAIL_PASSWORD` | Gmail app password | [App Passwords](https://myaccount.google.com/apppasswords) |
+| `RECIPIENT_EMAIL` | Report recipient | Any email address |
+| `TELEGRAM_BOT_TOKEN` | Telegram alerts | [@BotFather](https://t.me/botfather) |
+| `TELEGRAM_CHAT_ID` | Your chat ID | [@userinfobot](https://t.me/userinfobot) |
 
 ### 3. Run the Application
 
 ```bash
 # Start the FastAPI server
 uvicorn app.main:app --reload
-
-# Or use the main.py directly
-python -m app.main
 ```
 
-Access the dashboard at: **http://localhost:8000**
-
-API Documentation: **http://localhost:8000/docs**
+Access the application:
+- **Dashboard:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
 
 ## 📊 API Endpoints
+
+### Core Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/` | Dashboard UI |
 | `GET` | `/api/health` | Health check |
-| `POST` | `/api/analyze` | Run full analysis |
-| `GET` | `/api/market-data` | Get raw market data |
+| `POST` | `/api/analyze` | Run full AI analysis |
+| `GET` | `/api/market-data` | US market snapshot |
+| `GET` | `/api/nigerian-market` | NGX market snapshot |
+| `GET` | `/api/news` | Market news with AI analysis |
 
-### Example: Trigger Analysis via API
+### Forex Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/forex` | All forex pairs & commodities |
+| `GET` | `/api/forex/history/{symbol}` | Historical data with indicators |
+
+### Trading Signals
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/signals` | Signal history with stats |
+| `POST` | `/api/signals/record` | Record a manual signal |
+| `GET` | `/api/signals/performance` | Win rate & performance stats |
+
+### Advanced Analysis
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/analysis/mtf/{symbol}` | Multi-timeframe analysis |
+| `GET` | `/api/analysis/sr/{symbol}` | Support/Resistance levels |
+| `GET` | `/api/analysis/calendar` | Economic calendar |
+| `GET` | `/api/analysis/backtest/{symbol}` | Signal backtesting |
+| `GET` | `/api/analysis/full/{symbol}` | Complete analysis (all above) |
+
+### Stock Analysis
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/stock/search/{symbol}` | Search & analyze a stock |
+| `GET` | `/api/stock/sr/{symbol}` | Stock support/resistance |
+| `GET` | `/api/stock/backtest/{symbol}` | Stock signal backtest |
+| `GET` | `/api/stock/full/{symbol}` | Complete stock analysis |
+
+### Telegram Integration
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/telegram/test` | Send test message |
+| `POST` | `/api/telegram/trade-taken` | Confirm trade taken |
+
+## 💡 Example API Usage
+
+### Trigger Full Analysis
 
 ```bash
 curl -X POST http://localhost:8000/api/analyze \
     -H "Content-Type: application/json" \
-    -d '{"send_email": true}'
+    -d '{"send_email": true, "include_nigerian": true}'
+```
+
+### Get Forex Data
+
+```bash
+curl http://localhost:8000/api/forex
+```
+
+### Get EUR/USD Full Analysis
+
+```bash
+curl http://localhost:8000/api/analysis/full/EUR/USD
 ```
 
 ## ⏰ Automation (Cron Setup)
@@ -140,12 +216,12 @@ python scripts/run_daily_scan.py --no-email
 ### Windows Task Scheduler
 
 1. Open Task Scheduler
-2. Create Basic Task → Name: "Daily Stock Intel"
-3. Trigger: Daily at 9:00 AM (market open)
+2. Create Basic Task → Name: "MMA Daily Scan"
+3. Trigger: Daily at 9:00 AM
 4. Action: Start a Program
 5. Program: `python`
 6. Arguments: `C:\path\to\scripts\run_daily_scan.py`
-7. Start in: `C:\path\to\daily_stock_intel`
+7. Start in: `C:\path\to\MMA---Money-Market-Analysis`
 
 ### Linux/Mac Cron
 
@@ -153,8 +229,8 @@ python scripts/run_daily_scan.py --no-email
 # Edit crontab
 crontab -e
 
-# Add line (runs at 9:30 AM EST on weekdays)
-30 9 * * 1-5 cd /path/to/daily_stock_intel && /path/to/venv/bin/python scripts/run_daily_scan.py
+# Add line (runs at 9:30 AM on weekdays)
+30 9 * * 1-5 cd /path/to/MMA---Money-Market-Analysis && /path/to/venv/bin/python scripts/run_daily_scan.py
 ```
 
 ## 🌐 Deployment
@@ -182,7 +258,7 @@ heroku config:set RECIPIENT_EMAIL=recipient_email
 git push heroku main
 ```
 
-### Docker (Optional)
+### Docker
 
 ```dockerfile
 FROM python:3.11-slim
@@ -200,6 +276,9 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 # Test market data service
 python -c "from app.services.market_data import MarketDataService; print(MarketDataService().get_market_snapshot())"
 
+# Test forex service
+python -c "from app.services.forex_service import ForexService; print(ForexService().get_forex_snapshot())"
+
 # Test the full pipeline (dry-run)
 python scripts/run_daily_scan.py --dry-run
 
@@ -209,7 +288,7 @@ python scripts/run_daily_scan.py --dry-run
 
 ## 🔒 Security Notes
 
-- Never commit `.env` to version control
+- ⚠️ Never commit `.env` to version control
 - Use app-specific passwords for Gmail
 - Rotate API keys periodically
 - Consider rate limiting for production

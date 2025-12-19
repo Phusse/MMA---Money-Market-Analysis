@@ -1,13 +1,36 @@
+# Environment variables
 .env
-.env.example
-venv
-Procfile
-README.md
-INFO.TXT.txt
-__pycache__
-app/static/app.js
-app/static/index.html
-app/static/style.css
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime data
 data/signals_history.json
-requirements.txt
-scripts/run_daily_scan.py

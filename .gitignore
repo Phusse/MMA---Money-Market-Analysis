@@ -1,0 +1,13 @@
+.env
+.env.example
+venv
+Procfile
+README.md
+INFO.TXT.txt
+__pycache__
+app/static/app.js
+app/static/index.html
+app/static/style.css
+data/signals_history.json
+requirements.txt
+scripts/run_daily_scan.py

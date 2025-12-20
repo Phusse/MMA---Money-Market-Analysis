@@ -28,6 +28,7 @@ class UserLogin(BaseModel):
 class UserPreferences(BaseModel):
     telegram_enabled: bool = False
     telegram_chat_id: Optional[str] = None
+    phone_number: Optional[str] = None  # Optional phone for notifications
     email_reports: bool = True
     report_frequency: str = "daily"  # daily, weekly, none
     default_markets: list = ["us_market", "forex"]
@@ -174,6 +175,7 @@ class AuthService:
                     "id": response.user.id,
                     "email": response.user.email,
                     "name": profile.get("name") if profile else None,
+                    "avatar_url": profile.get("avatar_url") if profile else None,
                     "plan": profile.get("plan", "free") if profile else "free",
                     "account_type": profile.get("account_type", "both") if profile else "both",
                     "created_at": str(response.user.created_at)
@@ -266,6 +268,35 @@ class AuthService:
         except Exception as e:
             logger.error(f"Update preferences error: {e}")
             return {"success": False, "error": str(e)}
+    
+    async def save_telegram_chat_id(self, user_id: str, chat_id: str) -> Dict[str, Any]:
+        """Save Telegram chat_id for a user and enable Telegram notifications"""
+        try:
+            response = self.client.table("user_preferences").update({
+                "telegram_chat_id": chat_id,
+                "telegram_enabled": True,
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("user_id", user_id).execute()
+            return {"success": True, "data": response.data}
+        except Exception as e:
+            logger.error(f"Save telegram chat_id error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def get_user_by_telegram_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """Get user by Telegram connection token"""
+        try:
+            # Token format: user_id encoded
+            import base64
+            user_id = base64.urlsafe_b64decode(token.encode()).decode()
+            return await self.get_user_profile(user_id)
+        except Exception as e:
+            logger.error(f"Get user by telegram token error: {e}")
+            return None
+    
+    def generate_telegram_token(self, user_id: str) -> str:
+        """Generate a token for Telegram deep link"""
+        import base64
+        return base64.urlsafe_b64encode(user_id.encode()).decode()
     
     async def reset_password_request(self, email: str) -> Dict[str, Any]:
         """Send password reset email"""

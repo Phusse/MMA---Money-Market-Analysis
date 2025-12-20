@@ -65,7 +65,7 @@ class NotificationService:
             return False
         
     def send_telegram(self, message: str) -> bool:
-        """Send message to Telegram"""
+        """Send message to default/admin Telegram chat"""
         if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
             logging.warning("Telegram credentials not set. Skipping notification.")
             return False
@@ -82,6 +82,55 @@ class NotificationService:
             return response.status_code == 200
         except Exception as e:
             logging.error(f"Failed to send Telegram message: {e}")
+            return False
+    
+    def send_telegram_to_chat(self, chat_id: str, message: str) -> bool:
+        """Send message to a specific Telegram chat_id"""
+        if not settings.TELEGRAM_BOT_TOKEN:
+            logging.warning("Telegram bot token not set. Skipping notification.")
+            return False
+        
+        if not chat_id:
+            logging.warning("No chat_id provided. Skipping notification.")
+            return False
+
+        try:
+            import requests
+            url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+            payload = {
+                "chat_id": chat_id,
+                "text": message,
+                "parse_mode": "Markdown"
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            return response.status_code == 200
+        except Exception as e:
+            logging.error(f"Failed to send Telegram message to {chat_id}: {e}")
+            return False
+    
+    async def send_telegram_to_user(self, user_id: str, message: str) -> bool:
+        """Send Telegram message to a specific user by their user_id"""
+        try:
+            from app.services.auth_service import auth_service
+            
+            # Get user's telegram chat_id from preferences
+            prefs = await auth_service.get_user_preferences(user_id)
+            if not prefs:
+                logging.warning(f"No preferences found for user {user_id}")
+                return False
+            
+            chat_id = prefs.get("telegram_chat_id")
+            if not chat_id:
+                logging.warning(f"User {user_id} has no telegram_chat_id configured")
+                return False
+            
+            if not prefs.get("telegram_enabled", False):
+                logging.info(f"Telegram notifications disabled for user {user_id}")
+                return False
+            
+            return self.send_telegram_to_chat(chat_id, message)
+        except Exception as e:
+            logging.error(f"Failed to send Telegram to user {user_id}: {e}")
             return False
 
     def _markdown_to_html(self, text: str) -> str:

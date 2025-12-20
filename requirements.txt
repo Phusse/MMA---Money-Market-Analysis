@@ -12,3 +12,4 @@ openai
 supabase
 python-jose[cryptography]
 passlib[bcrypt]
+feedparser

@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     
     # Telegram Bot Settings (Optional)
     TELEGRAM_BOT_TOKEN: str = ""
-    TELEGRAM_CHAT_ID: str = ""
+    TELEGRAM_BOT_USERNAME: str = ""  # Bot username for deep links (without @)
+    TELEGRAM_CHAT_ID: str = ""  # Default/admin chat ID
     
     # Supabase Settings (Optional)
     SUPABASE_URL: str = ""

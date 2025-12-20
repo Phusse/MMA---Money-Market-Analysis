@@ -1,15 +1,18 @@
 """
-Financial News Service - Multi-Source
+Financial News Service - Multi-Source Dynamic
 
-Fetches news from multiple free sources with AI-powered impact analysis.
-Sources:
-- Finnhub News API (free tier)
-- Alpha Vantage News (free tier)
-- CryptoCompare News (free, no key required)
-- Multiple RSS feeds (backup)
-- Curated market intelligence (always available)
+Fetches news from multiple sources with AI-powered impact analysis.
+Sources (in priority order):
+1. CryptoCompare News (free, no API key required)
+2. Finnhub News API (free tier with key)
+3. Alpha Vantage News (free tier with key)
+4. NewsAPI.org (free tier with key) - Nigerian/Business news
+5. Marketaux (free tier with key) - US financial news
+6. RSS Feeds (free, no key required) - Multiple sources
+7. Curated content (fallback only when APIs fail)
 """
 import requests
+import feedparser
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 import logging
@@ -32,6 +35,16 @@ class NewsService:
         # API Keys (optional - works without them too)
         self.finnhub_key = os.getenv('FINNHUB_API_KEY', '')
         self.alpha_vantage_key = os.getenv('ALPHA_VANTAGE_KEY', '')
+        self.newsapi_key = os.getenv('NEWSAPI_KEY', '')
+        self.marketaux_key = os.getenv('MARKETAUX_KEY', '')
+        
+        # RSS Feed URLs
+        self.rss_feeds = {
+            'investing': 'https://www.investing.com/rss/news.rss',
+            'nasdaq': 'https://www.nasdaq.com/feed/rssoutbound?category=Markets',
+            'cnbc': 'https://www.cnbc.com/id/100003114/device/rss/rss.html',
+            'marketwatch': 'https://feeds.marketwatch.com/marketwatch/topstories/',
+        }
         
     def get_market_news(self, limit: int = 30, force_refresh: bool = False) -> List[NewsArticle]:
         """Fetch latest market news from multiple sources."""
@@ -57,24 +70,30 @@ class NewsService:
         if self.alpha_vantage_key:
             all_news.extend(self._fetch_alpha_vantage_news())
         
-        # 4. Add curated forex/economic news (always available)
-        all_news.extend(self._get_forex_economic_news())
+        # 4. Fetch Nigerian news from NewsAPI.org if key available
+        if self.newsapi_key:
+            all_news.extend(self._fetch_newsapi_nigerian())
         
-        # 5. Add Nigerian market news (curated)
-        all_news.extend(self._get_nigerian_news())
+        # 5. Fetch US market news from Marketaux if key available
+        if self.marketaux_key:
+            all_news.extend(self._fetch_marketaux_news())
         
-        # 6. Add US market intelligence (curated)
-        all_news.extend(self._get_us_market_news())
+        # 6. Fetch from RSS feeds (always available as fallback)
+        all_news.extend(self._fetch_rss_news())
         
-        # 7. Add general market insights
-        all_news.extend(self._get_market_insights())
+        # 7. Add curated fallbacks only if we don't have enough news
+        if len(all_news) < 10:
+            logger.info("📰 Adding curated fallback content...")
+            all_news.extend(self._get_curated_fallback())
         
         # Sort by date (newest first) and deduplicate
         seen_titles = set()
         unique_news = []
         for article in all_news:
-            if article.title not in seen_titles:
-                seen_titles.add(article.title)
+            # Simple deduplication by title similarity
+            title_key = article.title.lower()[:50]
+            if title_key not in seen_titles:
+                seen_titles.add(title_key)
                 unique_news.append(article)
         
         unique_news.sort(key=lambda x: x.published_at or "", reverse=True)
@@ -202,221 +221,254 @@ class NewsService:
         
         return articles
     
-    def _get_nigerian_news(self) -> List[NewsArticle]:
-        """Get Nigerian market news - curated real-time relevant content"""
-        today = datetime.now()
+    def _fetch_newsapi_nigerian(self) -> List[NewsArticle]:
+        """Fetch Nigerian business/market news from NewsAPI.org"""
+        articles = []
+        try:
+            # Search for Nigerian market/business news
+            queries = ['Nigeria stock market', 'NGX', 'Nigerian economy', 'Naira']
+            
+            for query in queries[:2]:  # Limit to 2 queries to stay within rate limits
+                response = requests.get(
+                    f"https://newsapi.org/v2/everything",
+                    params={
+                        'q': query,
+                        'language': 'en',
+                        'sortBy': 'publishedAt',
+                        'pageSize': 5,
+                        'apiKey': self.newsapi_key
+                    },
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    for item in data.get('articles', []):
+                        title = item.get('title', '')
+                        description = item.get('description', '') or ''
+                        
+                        if not title or title == '[Removed]':
+                            continue
+                        
+                        sentiment = self._analyze_sentiment(title + ' ' + description)
+                        impact = self._determine_impact(title + ' ' + description)
+                        
+                        # Parse the published date
+                        pub_date = item.get('publishedAt', '')
+                        if pub_date:
+                            try:
+                                dt = datetime.fromisoformat(pub_date.replace('Z', '+00:00'))
+                                pub_date = dt.strftime("%a, %d %b %Y %H:%M")
+                            except:
+                                pass
+                        
+                        articles.append(NewsArticle(
+                            title=f"🇳🇬 {title}",
+                            summary=description[:300] + '...' if len(description) > 300 else description,
+                            source=item.get('source', {}).get('name', 'NewsAPI'),
+                            url=item.get('url'),
+                            published_at=pub_date,
+                            category="ngx_market",
+                            related_tickers=self._extract_nigerian_tickers(title + ' ' + description),
+                            sentiment=sentiment,
+                            ai_analysis=self._generate_nigerian_analysis(title, sentiment, impact)
+                        ))
+            
+            logger.info(f"📰 Fetched {len(articles)} Nigerian news from NewsAPI")
+        except Exception as e:
+            logger.warning(f"NewsAPI fetch error: {e}")
+        
+        return articles
+    
+    def _fetch_marketaux_news(self) -> List[NewsArticle]:
+        """Fetch US financial news from Marketaux"""
+        articles = []
+        try:
+            response = requests.get(
+                "https://api.marketaux.com/v1/news/all",
+                params={
+                    'countries': 'us',
+                    'filter_entities': 'true',
+                    'language': 'en',
+                    'api_token': self.marketaux_key
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                for item in data.get('data', [])[:8]:
+                    title = item.get('title', '')
+                    description = item.get('description', '') or ''
+                    
+                    sentiment = self._analyze_sentiment(title + ' ' + description)
+                    impact = self._determine_impact(title + ' ' + description)
+                    
+                    # Extract tickers from entities
+                    tickers = []
+                    for entity in item.get('entities', []):
+                        if entity.get('symbol'):
+                            tickers.append(entity.get('symbol'))
+                    
+                    articles.append(NewsArticle(
+                        title=f"🇺🇸 {title}",
+                        summary=description[:300] + '...' if len(description) > 300 else description,
+                        source=item.get('source', 'Marketaux'),
+                        url=item.get('url'),
+                        published_at=item.get('published_at', ''),
+                        category="us_market",
+                        related_tickers=tickers[:5],
+                        sentiment=sentiment,
+                        ai_analysis=self._generate_market_analysis(title, sentiment, impact, 'us_market')
+                    ))
+            
+            logger.info(f"📰 Fetched {len(articles)} US news from Marketaux")
+        except Exception as e:
+            logger.warning(f"Marketaux fetch error: {e}")
+        
+        return articles
+    
+    def _fetch_rss_news(self) -> List[NewsArticle]:
+        """Fetch news from multiple RSS feeds"""
+        articles = []
+        
+        for source_name, feed_url in self.rss_feeds.items():
+            try:
+                feed = feedparser.parse(feed_url)
+                
+                for entry in feed.entries[:5]:  # Limit per feed
+                    title = entry.get('title', '')
+                    summary = entry.get('summary', '') or entry.get('description', '') or ''
+                    link = entry.get('link', '')
+                    
+                    # Parse published date
+                    pub_date = ''
+                    if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                        try:
+                            dt = datetime(*entry.published_parsed[:6])
+                            pub_date = dt.strftime("%a, %d %b %Y %H:%M")
+                        except:
+                            pass
+                    
+                    # Clean HTML from summary
+                    import re
+                    summary = re.sub(r'<[^>]+>', '', summary)
+                    
+                    sentiment = self._analyze_sentiment(title + ' ' + summary)
+                    category = self._determine_category(title + ' ' + summary)
+                    impact = self._determine_impact(title + ' ' + summary)
+                    
+                    articles.append(NewsArticle(
+                        title=title,
+                        summary=summary[:300] + '...' if len(summary) > 300 else summary,
+                        source=source_name.title(),
+                        url=link,
+                        published_at=pub_date,
+                        category=category,
+                        related_tickers=self._extract_tickers(title + ' ' + summary),
+                        sentiment=sentiment,
+                        ai_analysis=self._generate_market_analysis(title, sentiment, impact, category)
+                    ))
+                
+                logger.info(f"📰 Fetched {len(feed.entries[:5])} articles from {source_name}")
+            except Exception as e:
+                logger.warning(f"RSS feed {source_name} error: {e}")
+        
+        return articles
+    
+    def _get_curated_fallback(self) -> List[NewsArticle]:
+        """Fallback curated content when live sources fail - with dynamic timestamps"""
+        now = datetime.now()
+        timestamp = now.strftime("%a, %d %b %Y %H:%M")
+        
+        # Return minimal curated content as last resort
         return [
             NewsArticle(
-                title="🇳🇬 NGX Banking Sector: Strong Institutional Buying",
-                summary="Nigerian banking stocks showing significant institutional interest. GTCO, Zenith Bank, and UBA lead gains as foreign portfolio investors return to the market. CBN's monetary policy stability attracting capital inflows.",
-                source="NGX Market Watch",
-                published_at="Market Intelligence",
-                category="ngx_market",
-                related_tickers=["GTCO", "ZENITHBANK", "UBA", "FBNH", "ACCESSCORP"],
-                sentiment="positive",
-                ai_analysis="🟢 HIGH IMPACT: Banking sector momentum suggests risk-on sentiment in Nigerian equities. Consider accumulating GTCO and ZENITHBANK on any pullbacks. Set stop-loss at -5%."
-            ),
-            NewsArticle(
-                title="🇳🇬 Dangote Cement Infrastructure Play",
-                summary="DANGCEM benefiting from accelerated government infrastructure spending. Cement demand up 20% YoY. Company expanding capacity to meet construction boom demands across West Africa.",
-                source="NGX Market Watch",
-                published_at="Market Intelligence",
-                category="ngx_market",
-                related_tickers=["DANGCEM", "BUACEMENT", "WAPCO"],
-                sentiment="positive",
-                ai_analysis="🟢 MEDIUM IMPACT: Infrastructure theme remains strong. DANGCEM is expensive but has pricing power. BUACEMENT offers better value. Long-term HOLD."
-            ),
-            NewsArticle(
-                title="🇳🇬 Naira Exchange Rate Update",
-                summary="Official USD/NGN rate showing relative stability. CBN continues forex interventions. Parallel market premium narrowing as supply improves. BDC rates converging toward I&E window.",
-                source="CBN FX Watch",
-                published_at="Market Intelligence",
-                category="ngx_market",
-                related_tickers=["USD/NGN", "EUR/NGN", "GBP/NGN"],
-                sentiment="neutral",
-                ai_analysis="🟡 MEDIUM IMPACT: Forex stability positive for importers and multinationals. Watch parallel market spread as indicator of true FX pressure."
-            ),
-            NewsArticle(
-                title="🇳🇬 Nigerian Oil & Gas Sector Outlook",
-                summary="SEPLAT and OANDO positioned for gains as crude prices stabilize. Dangote Refinery operations ramping up, potentially reducing import dependency and forex pressure.",
-                source="Energy Watch Nigeria",
-                published_at="Market Intelligence",
-                category="ngx_market",
-                related_tickers=["SEPLAT", "OANDO", "TOTAL", "CONOIL"],
-                sentiment="positive",
-                ai_analysis="🟢 HIGH IMPACT: Local refining capacity is game-changer for Nigeria. Oil stocks undervalued relative to global peers. Consider gradual accumulation."
-            ),
-        ]
-    
-    def _get_us_market_news(self) -> List[NewsArticle]:
-        """Get US market news - curated real-time relevant content"""
-        today = datetime.now()
-        return [
-            NewsArticle(
-                title="🇺🇸 S&P 500 Technical Outlook: Key Levels to Watch",
-                summary="S&P 500 trading near all-time highs. Key support at 4,800, resistance at 5,000. Breadth improving as mid-caps and small-caps participating in rally. VIX remains subdued suggesting complacency.",
-                source="US Market Analysis",
-                published_at="Market Intelligence",
-                category="us_market",
-                related_tickers=["SPY", "QQQ", "IWM", "VIX"],
-                sentiment="positive",
-                ai_analysis="🟢 MEDIUM IMPACT: Bullish trend intact but watch for overbought conditions. Use 4,800 as stop-loss level for long positions. Consider profit-taking at 5,000."
-            ),
-            NewsArticle(
-                title="🇺🇸 Tech Giants Earnings Season Preview",
-                summary="AAPL, MSFT, GOOGL, AMZN, META earnings approaching. AI narrative driving valuations. Cloud revenue growth key metric to watch. Guidance will be more important than beats.",
-                source="Earnings Watch",
-                published_at="Market Intelligence",
-                category="us_market",
-                related_tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA"],
-                sentiment="neutral",
-                ai_analysis="🟡 HIGH IMPACT: Earnings volatility expected. Consider strangle strategies for options traders. Long-term investors can use dips as buying opportunities."
-            ),
-            NewsArticle(
-                title="🇺🇸 Fed Rate Path: Market Expectations Update",
-                summary="Fed fund futures pricing in rate cuts in 2025. Inflation cooling but labor market remains strong. FOMC members maintaining data-dependent stance. Bond yields responding to shift in expectations.",
-                source="Fed Watch",
-                published_at="Market Intelligence",
-                category="us_market",
-                related_tickers=["TLT", "IEF", "SPY", "XLF"],
-                sentiment="positive",
-                ai_analysis="🟢 HIGH IMPACT: Rate cut expectations bullish for equities and bonds. Consider TLT for duration exposure. Financial sector (XLF) may face headwinds from lower rates."
-            ),
-            NewsArticle(
-                title="🇺🇸 Semiconductor Sector: AI Demand Surge",
-                summary="NVDA, AMD, AVGO leading semiconductor rally. AI chip demand exceeding supply. Data center buildout accelerating. Valuations stretched but growth justifies premiums for market leaders.",
-                source="Tech Sector Watch",
-                published_at="Market Intelligence",
-                category="us_market",
-                related_tickers=["NVDA", "AMD", "AVGO", "INTC", "TSM"],
-                sentiment="positive",
-                ai_analysis="🟢 HIGH IMPACT: Semiconductor supercycle thesis intact. NVDA expensive but dominant. AMD better value. Use 10-15% pullbacks as entry points."
-            ),
-        ]
-    
-    def _get_forex_economic_news(self) -> List[NewsArticle]:
-        """Get Forex and Economic Calendar news"""
-        today = datetime.now()
-        day_of_week = today.weekday()
-        day_of_month = today.day
-        
-        news = []
-        
-        # NFP - First Friday of month
-        if day_of_week == 4 and day_of_month <= 7:
-            news.append(NewsArticle(
-                title="⚠️ NFP RELEASE TODAY - Extreme Volatility Expected",
-                summary="US Non-Farm Payrolls data releasing at 8:30 AM EST. This is the highest-impact forex event of the month. Expected: 180K jobs. Actual vs expected determines USD direction.",
-                source="Economic Calendar",
-                published_at="Breaking - Check Calendar",
-                category="forex",
-                related_tickers=["EUR/USD", "GBP/USD", "USD/JPY", "XAU/USD"],
-                sentiment="neutral",
-                ai_analysis="🔴 EXTREME IMPACT: DO NOT TRADE 15 mins before/after NFP unless experienced. Expect 50-100+ pip moves. Better than expected = USD BULLISH. Worse = USD BEARISH. Wait for dust to settle before entering."
-            ))
-        
-        # CPI - Mid month
-        if 10 <= day_of_month <= 15 and day_of_week < 5:
-            news.append(NewsArticle(
-                title="⚠️ US CPI Inflation Data - Fed Catalyst",
-                summary="Consumer Price Index (CPI) release expected. Core CPI (ex-food/energy) is the key metric. Higher than expected = hawkish Fed = stronger USD. Markets very sensitive to inflation data.",
-                source="Economic Calendar",
-                published_at="Breaking - Check Calendar",
-                category="forex",
-                related_tickers=["EUR/USD", "USD/JPY", "XAU/USD", "TLT"],
-                sentiment="neutral",
-                ai_analysis="🔴 HIGH IMPACT: Hot CPI = USD rally, Gold and bonds sell off. Cool CPI = USD weakness, Gold and bonds rally. Position after the release, not before."
-            ))
-        
-        # Regular forex intelligence
-        news.extend([
-            NewsArticle(
-                title="💱 EUR/USD: ECB vs Fed Policy Divergence",
-                summary="EUR/USD driven by interest rate differential. ECB expected to cut before Fed shifts dovish. This favors USD strength near-term. Key levels: Support 1.0650, Resistance 1.0950.",
-                source="Forex Analysis",
-                published_at="Market Intelligence",
-                category="forex",
-                related_tickers=["EUR/USD", "EUR/GBP", "EUR/JPY"],
-                sentiment="negative",
-                ai_analysis="🟡 MEDIUM IMPACT: EUR weakness likely to continue. Look for SELL setups on rallies to 1.0900. Target 1.0700. Stop-loss above 1.1000."
-            ),
-            NewsArticle(
-                title="💱 USD/JPY: BOJ Policy Normalization Watch",
-                summary="Bank of Japan slowly exiting negative rates. Yen weakness persists but intervention risk above 155. Carry trade still attractive but crowded. Key levels: Support 147, Resistance 152.",
-                source="Forex Analysis",
-                published_at="Market Intelligence",
-                category="forex",
-                related_tickers=["USD/JPY", "EUR/JPY", "GBP/JPY"],
-                sentiment="neutral",
-                ai_analysis="🟡 MEDIUM IMPACT: JPY intervention risk real above 155. Prefer buying dips in USD/JPY toward 147-148 zone. Take profits at 152."
-            ),
-            NewsArticle(
-                title="🪙 Gold (XAU/USD): Safe Haven Demand Analysis",
-                summary="Gold trading near key $2,000 level. Central bank buying providing floor. Geopolitical tensions supporting safe-haven demand. Rate cut expectations bullish for gold.",
-                source="Commodity Watch",
-                published_at="Market Intelligence",
-                category="forex",
-                related_tickers=["XAU/USD", "GC=F", "GLD"],
-                sentiment="positive",
-                ai_analysis="🟢 MEDIUM IMPACT: Gold uptrend intact. Buy dips toward $1,950-1,980 zone. Target $2,100+. Stop-loss below $1,920."
-            ),
-            NewsArticle(
-                title="🛢️ Crude Oil: OPEC+ Supply Dynamics",
-                summary="WTI trading between $70-80 range. OPEC+ production cuts supporting prices. Demand concerns from China weighing. Key levels: Support $68, Resistance $82.",
-                source="Energy Watch",
-                published_at="Market Intelligence",
-                category="forex",
-                related_tickers=["CL=F", "USO", "XLE"],
-                sentiment="neutral",
-                ai_analysis="🟡 MEDIUM IMPACT: Range-bound trading expected. Buy near $70 support, sell near $80 resistance. Breakout above $82 signals new uptrend."
-            ),
-        ])
-        
-        return news
-    
-    def _get_market_insights(self) -> List[NewsArticle]:
-        """Generate market insights based on current conditions"""
-        today = datetime.now()
-        hour = today.hour
-        day_of_week = today.weekday()
-        
-        insights = []
-        
-        # Session-based insights
-        if 8 <= hour <= 11:  # London session opening
-            insights.append(NewsArticle(
-                title="🌍 London Session Active - High Volatility Period",
-                summary="London forex session in full swing. EUR, GBP pairs most active. Major bank flows and institutional trading driving moves. Best time for breakout strategies.",
-                source="Session Watch",
-                published_at="Daily Insight",
-                category="forex",
-                sentiment="neutral",
-                ai_analysis="🟢 TRADING TIP: London session offers best forex liquidity. Focus on EUR/USD and GBP/USD. Spreads tightest now."
-            ))
-        elif 13 <= hour <= 17:  # NY session overlap
-            insights.append(NewsArticle(
-                title="🇺🇸 New York Session Open - Maximum Liquidity",
-                summary="US markets open with London still active. This overlap provides maximum liquidity and often produces the day's biggest moves. Economic data releases happen now.",
-                source="Session Watch",
-                published_at="Daily Insight",
-                category="forex",
-                sentiment="neutral",
-                ai_analysis="🟢 TRADING TIP: Best time to trade US stocks and majors. Watch for economic data at 8:30 AM and 10:00 AM EST."
-            ))
-        
-        # Weekend prep
-        if day_of_week == 4:  # Friday
-            insights.append(NewsArticle(
-                title="📅 Friday Trading: Position Management Day",
-                summary="End of week positioning. Traders squaring positions before weekend. Volatility can spike into close. Consider reducing position sizes or hedging.",
-                source="Trading Calendar",
-                published_at="Daily Insight",
+                title="📊 Market Overview: Global Trading Update",
+                summary="Markets are in active trading. Check live prices for the latest movements across major indices, commodities, and currencies. This is a general market update - for specific news, ensure API keys are configured.",
+                source="MMI Market Watch",
+                published_at=timestamp,
                 category="general",
+                related_tickers=["SPY", "QQQ", "DIA"],
                 sentiment="neutral",
-                ai_analysis="⚠️ RISK MANAGEMENT: Reduce leverage on Fridays. Weekend gap risk is real. Close or hedge positions you don't want to hold over weekend."
-            ))
+                ai_analysis="ℹ️ NOTICE: Live news feeds unavailable. Configure NEWSAPI_KEY, MARKETAUX_KEY, or FINNHUB_API_KEY in your .env file for real-time news."
+            ),
+            NewsArticle(
+                title="💱 Forex Session Status",
+                summary=self._get_session_status(),
+                source="MMI Forex Watch",
+                published_at=timestamp,
+                category="forex",
+                related_tickers=["EUR/USD", "GBP/USD", "USD/JPY"],
+                sentiment="neutral",
+                ai_analysis=self._get_session_trading_tip()
+            ),
+        ]
+    
+    def _get_session_status(self) -> str:
+        """Get current forex session status"""
+        hour = datetime.now().hour
         
-        return insights
+        if 0 <= hour < 8:
+            return "Asian session (Tokyo/Sydney) currently active. Lower volatility expected for major pairs. AUD, NZD, and JPY pairs most active."
+        elif 8 <= hour < 12:
+            return "London session open - peak forex trading hours. EUR and GBP pairs most active. High liquidity and best spreads available."
+        elif 12 <= hour < 17:
+            return "London/New York overlap - maximum liquidity period. Highest volatility window for major currency pairs."
+        elif 17 <= hour < 22:
+            return "New York session active. USD pairs remain liquid. Watch for late-session position squaring."
+        else:
+            return "Transitioning to Asian session. Liquidity decreasing for major pairs. Consider wider stops if trading overnight."
+    
+    def _get_session_trading_tip(self) -> str:
+        """Get trading tip based on current session"""
+        hour = datetime.now().hour
+        
+        if 8 <= hour < 17:
+            return "🟢 OPTIMAL TRADING: Major forex sessions active. Best time for EUR/USD and GBP/USD trades with tight spreads."
+        else:
+            return "🟡 REDUCED LIQUIDITY: Off-peak hours. Consider wider stops and smaller position sizes. Avoid exotic pairs."
+    
+    def _extract_nigerian_tickers(self, text: str) -> List[str]:
+        """Extract Nigerian stock tickers from text"""
+        text_upper = text.upper()
+        tickers = []
+        
+        ngx_stocks = {
+            'DANGOTE': 'DANGCEM', 'DANGCEM': 'DANGCEM',
+            'ZENITH': 'ZENITHBANK', 'ZENITHBANK': 'ZENITHBANK',
+            'GTCO': 'GTCO', 'GTB': 'GTCO', 'GUARANTY': 'GTCO',
+            'UBA': 'UBA',
+            'ACCESS': 'ACCESSCORP', 'ACCESSCORP': 'ACCESSCORP',
+            'FBNH': 'FBNH', 'FIRST BANK': 'FBNH',
+            'SEPLAT': 'SEPLAT',
+            'OANDO': 'OANDO',
+            'MTN': 'MTNN', 'MTNN': 'MTNN',
+            'AIRTEL': 'AIRTELAFRI', 'AIRTELAFRI': 'AIRTELAFRI',
+            'BUA': 'BUACEMENT', 'BUACEMENT': 'BUACEMENT',
+            'NESTLE': 'NESTLE',
+            'UNILEVER': 'UNILEVER',
+        }
+        
+        for keyword, ticker in ngx_stocks.items():
+            if keyword in text_upper and ticker not in tickers:
+                tickers.append(ticker)
+        
+        return tickers[:5]
+    
+    def _extract_tickers(self, text: str) -> List[str]:
+        """Extract stock tickers from text"""
+        text_upper = text.upper()
+        tickers = []
+        
+        common_tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 
+                          'SPY', 'QQQ', 'AMD', 'INTC', 'JPM', 'BAC', 'GS']
+        
+        for ticker in common_tickers:
+            if ticker in text_upper and ticker not in tickers:
+                tickers.append(ticker)
+        
+        return tickers[:5]
     
     def _extract_crypto_tickers(self, text: str) -> List[str]:
         """Extract crypto tickers from text"""
@@ -513,11 +565,22 @@ class NewsService:
         impact_emoji = '🔴' if impact == 'high' else '🟡' if impact == 'medium' else '🟢'
         
         if sentiment == 'positive':
-            return f"{impact_emoji} {impact.upper()} IMPACT: Bullish catalyst for {category}. Look for BUY setups with proper risk management. Trail stops as position moves in favor."
+            return f"{impact_emoji} {impact.upper()} IMPACT: Bullish catalyst. Look for BUY setups with proper risk management. Trail stops as position moves in favor."
         elif sentiment == 'negative':
-            return f"{impact_emoji} {impact.upper()} IMPACT: Bearish development. Exercise caution with longs. Consider hedging or reducing exposure. Short sellers may find opportunities."
+            return f"{impact_emoji} {impact.upper()} IMPACT: Bearish development. Exercise caution with longs. Consider hedging or reducing exposure."
         else:
-            return f"{impact_emoji} {impact.upper()} IMPACT: Neutral market-moving event. Wait for clarity before taking directional bets. Focus on range-bound strategies."
+            return f"{impact_emoji} {impact.upper()} IMPACT: Neutral market event. Wait for clarity before taking directional bets. Focus on range-bound strategies."
+    
+    def _generate_nigerian_analysis(self, title: str, sentiment: str, impact: str) -> str:
+        """Generate Nigerian market-specific analysis"""
+        impact_emoji = '🔴' if impact == 'high' else '🟡' if impact == 'medium' else '🟢'
+        
+        if sentiment == 'positive':
+            return f"{impact_emoji} {impact.upper()} IMPACT: Positive for NGX. Consider accumulating quality stocks like GTCO, ZENITHBANK, DANGCEM on dips."
+        elif sentiment == 'negative':
+            return f"{impact_emoji} {impact.upper()} IMPACT: Caution for Nigerian market. Monitor Naira/USD rates. Consider defensive positions in consumer staples."
+        else:
+            return f"{impact_emoji} {impact.upper()} IMPACT: Neutral for NGX. Focus on dividend-paying stocks. Watch CBN policy updates for direction."
 
 
 # Create singleton instance

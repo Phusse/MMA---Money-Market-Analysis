@@ -1,7 +1,7 @@
 """
 API Endpoints for Daily AI Stock Intelligence System
 """
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, File, UploadFile
 from datetime import datetime
 from app.services.market_data import MarketDataService
 from app.services.llm_analyst import LLMService
@@ -917,6 +917,142 @@ _Good luck! Remember to stick to your stop loss!_ 🍀
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Helper function to get current user from auth header
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    """Dependency to get current user from Authorization header"""
+    if not authorization:
+        return None
+    
+    try:
+        # Extract token from "Bearer <token>"
+        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        user = await auth_service.get_current_user(token)
+        return user
+    except Exception:
+        return None
+
+
+@router.get("/telegram/connect")
+async def get_telegram_connect_link(user = Depends(get_current_user)):
+    """
+    Get Telegram deep link for connecting user's account.
+    Returns a link that opens the bot with a unique token.
+    """
+    from app.core.config import get_settings
+    settings = get_settings()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if not settings.TELEGRAM_BOT_USERNAME:
+        raise HTTPException(status_code=503, detail="Telegram bot not configured")
+    
+    # Generate unique token for this user
+    token = auth_service.generate_telegram_token(user["id"])
+    
+    # Build deep link
+    deep_link = f"https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start={token}"
+    
+    # Check if already connected
+    prefs = await auth_service.get_user_preferences(user["id"])
+    is_connected = bool(prefs and prefs.get("telegram_chat_id"))
+    
+    return {
+        "success": True,
+        "deep_link": deep_link,
+        "bot_username": settings.TELEGRAM_BOT_USERNAME,
+        "is_connected": is_connected,
+        "token": token
+    }
+
+
+@router.get("/telegram/status")
+async def get_telegram_status(user = Depends(get_current_user)):
+    """Check if user has connected their Telegram account"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    prefs = await auth_service.get_user_preferences(user["id"])
+    is_connected = bool(prefs and prefs.get("telegram_chat_id"))
+    
+    return {
+        "success": True,
+        "is_connected": is_connected,
+        "telegram_enabled": prefs.get("telegram_enabled", False) if prefs else False
+    }
+
+
+class TelegramWebhookUpdate(BaseModel):
+    """Telegram webhook update payload"""
+    update_id: int
+    message: Optional[dict] = None
+
+
+@router.post("/telegram/webhook")
+async def telegram_webhook(update: TelegramWebhookUpdate):
+    """
+    Webhook endpoint for Telegram bot updates.
+    Handles /start command with user token to capture chat_id.
+    """
+    from app.core.config import get_settings
+    import requests
+    
+    settings = get_settings()
+    
+    if not update.message:
+        return {"ok": True}
+    
+    message = update.message
+    chat_id = str(message.get("chat", {}).get("id", ""))
+    text = message.get("text", "")
+    
+    # Handle /start command with token
+    if text.startswith("/start "):
+        token = text.replace("/start ", "").strip()
+        
+        if token:
+            # Decode token to get user_id
+            try:
+                import base64
+                user_id = base64.urlsafe_b64decode(token.encode()).decode()
+                
+                # Save chat_id to user's preferences
+                result = await auth_service.save_telegram_chat_id(user_id, chat_id)
+                
+                if result.get("success"):
+                    # Send welcome message
+                    welcome_msg = """
+🎉 *Successfully Connected!*
+
+You'll now receive trading alerts and market updates directly here.
+
+✅ Account linked
+📈 Alerts enabled
+
+Use the MMA dashboard to manage your notification preferences.
+                    """
+                    notification_service.send_telegram_to_chat(chat_id, welcome_msg)
+                else:
+                    notification_service.send_telegram_to_chat(
+                        chat_id, 
+                        "❌ Connection failed. Please try again from the settings page."
+                    )
+            except Exception as e:
+                notification_service.send_telegram_to_chat(
+                    chat_id,
+                    "❌ Invalid or expired link. Please get a new connection link from settings."
+                )
+    
+    elif text == "/start":
+        # Generic start without token
+        notification_service.send_telegram_to_chat(
+            chat_id,
+            "👋 Welcome to MMA Bot!\n\nTo connect your account, go to Settings → Notifications in the MMA app and click 'Connect Telegram'."
+        )
+    
+    return {"ok": True}
+
+
 # ============================================
 # SIGNAL ENDPOINTS
 # ============================================
@@ -999,6 +1135,7 @@ class LoginRequest(BaseModel):
 class PreferencesUpdate(BaseModel):
     telegram_enabled: Optional[bool] = None
     telegram_chat_id: Optional[str] = None
+    phone_number: Optional[str] = None
     email_reports: Optional[bool] = None
     report_frequency: Optional[str] = None
     default_markets: Optional[List[str]] = None
@@ -1011,18 +1148,7 @@ class PasswordResetRequest(BaseModel):
     email: EmailStr
 
 
-async def get_current_user(authorization: Optional[str] = Header(None)):
-    """Dependency to get current user from Authorization header"""
-    if not authorization:
-        return None
-    
-    try:
-        # Extract token from "Bearer <token>"
-        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        user = await auth_service.get_current_user(token)
-        return user
-    except Exception:
-        return None
+# Note: get_current_user is defined earlier in the file (before telegram endpoints)
 
 
 @router.get("/auth/status")
@@ -1192,18 +1318,25 @@ async def get_profile(user = Depends(get_current_user)):
     }
 
 
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
 @router.put("/user/profile")
 async def update_profile(
-    name: Optional[str] = None,
+    data: ProfileUpdate,
     user = Depends(get_current_user)
 ):
-    """Update user profile"""
+    """Update user profile (name or avatar)"""
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     update_data = {}
-    if name is not None:
-        update_data["name"] = name
+    if data.name is not None:
+        update_data["name"] = data.name
+    if data.avatar_url is not None:
+        update_data["avatar_url"] = data.avatar_url
     
     if not update_data:
         return {"success": True, "message": "No changes to save"}
@@ -1217,6 +1350,79 @@ async def update_profile(
         "success": True,
         "message": "Profile updated successfully"
     }
+
+
+@router.post("/user/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    user = Depends(get_current_user)
+):
+    """Upload user avatar image"""
+    import base64
+    import os
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Read file content
+    content = await file.read()
+    
+    # Check file size (max 2MB)
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image must be smaller than 2MB")
+    
+    try:
+        # Try to upload to Supabase Storage
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_KEY")
+        
+        if supabase_url and supabase_key:
+            from supabase import create_client
+            supabase = create_client(supabase_url, supabase_key)
+            
+            # Generate unique filename
+            file_ext = file.filename.split('.')[-1] if file.filename else 'jpg'
+            filename = f"avatars/{user['id']}.{file_ext}"
+            
+            # Upload to Supabase Storage
+            try:
+                # Try to delete existing avatar first
+                supabase.storage.from_('avatars').remove([filename])
+            except:
+                pass
+            
+            result = supabase.storage.from_('avatars').upload(
+                filename,
+                content,
+                {"content-type": file.content_type}
+            )
+            
+            # Get public URL
+            avatar_url = supabase.storage.from_('avatars').get_public_url(filename)
+            
+        else:
+            # Fallback: Convert to base64 data URL (stored in DB)
+            base64_data = base64.b64encode(content).decode('utf-8')
+            avatar_url = f"data:{file.content_type};base64,{base64_data}"
+        
+        # Update user profile with avatar URL
+        update_result = await auth_service.update_user_profile(user["id"], {"avatar_url": avatar_url})
+        
+        if not update_result.get("success"):
+            raise HTTPException(status_code=500, detail="Failed to save avatar")
+        
+        return {
+            "success": True,
+            "avatar_url": avatar_url,
+            "message": "Avatar uploaded successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 class UpdateAccountTypeRequest(BaseModel):

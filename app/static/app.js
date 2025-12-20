@@ -5368,3 +5368,186 @@ async function takeTrade(symbol, signal, price) {
 window.recordForexSignals = recordForexSignals;
 window.displayTopSignal = displayTopSignal;
 window.takeTrade = takeTrade;
+
+// ============================================
+// Charts Page Functions
+// ============================================
+
+let currentChartSymbol = '';
+let currentChartTimeframe = 'D'; // Default to Daily
+
+// Symbol mapping for TradingView
+const chartSymbolMap = {
+    'EUR/USD': 'FX:EURUSD',
+    'EURUSD': 'FX:EURUSD',
+    'GBP/USD': 'FX:GBPUSD',
+    'GBPUSD': 'FX:GBPUSD',
+    'USD/JPY': 'FX:USDJPY',
+    'USDJPY': 'FX:USDJPY',
+    'AUD/USD': 'FX:AUDUSD',
+    'AUDUSD': 'FX:AUDUSD',
+    'USD/CHF': 'FX:USDCHF',
+    'USDCHF': 'FX:USDCHF',
+    'EUR/GBP': 'FX:EURGBP',
+    'EURGBP': 'FX:EURGBP',
+    'GBP/JPY': 'FX:GBPJPY',
+    'GBPJPY': 'FX:GBPJPY',
+    'EUR/JPY': 'FX:EURJPY',
+    'EURJPY': 'FX:EURJPY',
+    'USD/CAD': 'FX:USDCAD',
+    'USDCAD': 'FX:USDCAD',
+    'NZD/USD': 'FX:NZDUSD',
+    'NZDUSD': 'FX:NZDUSD',
+    // Commodities
+    'XAUUSD': 'OANDA:XAUUSD',
+    'XAU/USD': 'OANDA:XAUUSD',
+    'GOLD': 'OANDA:XAUUSD',
+    'XAGUSD': 'OANDA:XAGUSD',
+    'XAG/USD': 'OANDA:XAGUSD',
+    'SILVER': 'OANDA:XAGUSD',
+    'USOIL': 'TVC:USOIL',
+    'OIL': 'TVC:USOIL',
+    'CRUDE': 'TVC:USOIL',
+    // Crypto
+    'BTCUSD': 'BINANCE:BTCUSDT',
+    'BTC/USD': 'BINANCE:BTCUSDT',
+    'BITCOIN': 'BINANCE:BTCUSDT',
+    'ETHUSD': 'BINANCE:ETHUSDT',
+    'ETH/USD': 'BINANCE:ETHUSDT',
+    'ETHEREUM': 'BINANCE:ETHUSDT'
+};
+
+// Convert symbol to TradingView format
+function getTradingViewSymbol(symbol) {
+    const normalizedSymbol = symbol.toUpperCase().replace(/\s/g, '');
+
+    // Check if it's in our map
+    if (chartSymbolMap[normalizedSymbol]) {
+        return chartSymbolMap[normalizedSymbol];
+    }
+
+    // Check if it's a forex pair (6 letters)
+    if (/^[A-Z]{6}$/.test(normalizedSymbol)) {
+        return `FX:${normalizedSymbol}`;
+    }
+
+    // Check if it's a forex pair with slash
+    if (/^[A-Z]{3}\/[A-Z]{3}$/.test(normalizedSymbol)) {
+        return `FX:${normalizedSymbol.replace('/', '')}`;
+    }
+
+    // Assume it's a stock
+    return normalizedSymbol;
+}
+
+// Load chart for a specific symbol
+function loadChartForSymbol(symbol) {
+    // Get symbol from input if not provided
+    if (!symbol) {
+        const input = document.getElementById('chartSearchInput');
+        symbol = input ? input.value.trim() : '';
+    }
+
+    if (!symbol) {
+        showToast('Please enter a symbol', 'error');
+        return;
+    }
+
+    currentChartSymbol = symbol.toUpperCase();
+    const tvSymbol = getTradingViewSymbol(currentChartSymbol);
+
+    // Update input with the symbol
+    const input = document.getElementById('chartSearchInput');
+    if (input) {
+        input.value = currentChartSymbol;
+    }
+
+    // Update title
+    const titleEl = document.getElementById('chartSymbolTitle');
+    if (titleEl) {
+        titleEl.textContent = `${currentChartSymbol} Chart`;
+    }
+
+    // Show live badge
+    const liveBadge = document.getElementById('chartLiveBadge');
+    if (liveBadge) {
+        liveBadge.classList.remove('hidden');
+    }
+
+    // Map timeframe to TradingView interval
+    const tfMap = {
+        '1': '60',     // 1 hour
+        '4': '240',    // 4 hours
+        'D': 'D',      // Daily
+        'W': 'W'       // Weekly
+    };
+    const tvInterval = tfMap[currentChartTimeframe] || 'D';
+
+    // Load TradingView widget
+    const container = document.getElementById('chartsPageWidget');
+    if (!container) return;
+
+    // Show loading state
+    container.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-full">
+            <div class="w-12 h-12 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin mb-4"></div>
+            <p class="text-slate-400">Loading ${currentChartSymbol} chart...</p>
+        </div>
+    `;
+
+    // Create TradingView widget iframe
+    setTimeout(() => {
+        container.innerHTML = '';
+        const iframe = document.createElement('iframe');
+        iframe.src = `https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}&interval=${tvInterval}&theme=dark&style=1&locale=en&toolbar_bg=%23121212&enable_publishing=false&withdateranges=true&hide_side_toolbar=false&allow_symbol_change=true&saveimage=false&container_id=chartsPageWidget`;
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.allowFullscreen = true;
+        container.appendChild(iframe);
+    }, 300);
+
+    showToast(`Loading ${currentChartSymbol} chart`, 'info');
+}
+
+// Change chart timeframe
+function changeChartTimeframe(tf) {
+    currentChartTimeframe = tf;
+
+    // Update active button styling
+    document.querySelectorAll('.chart-tf-btn').forEach(btn => {
+        if (btn.dataset.tf === tf) {
+            btn.classList.add('bg-violet-500/30', 'text-violet-300', 'active');
+            btn.classList.remove('hover:bg-white/10');
+        } else {
+            btn.classList.remove('bg-violet-500/30', 'text-violet-300', 'active');
+            btn.classList.add('hover:bg-white/10');
+        }
+    });
+
+    // Reload chart if we have a symbol
+    if (currentChartSymbol) {
+        loadChartForSymbol(currentChartSymbol);
+    }
+}
+
+// Navigate to Charts page with a specific symbol
+function navigateToCharts(symbol) {
+    // Update URL hash to charts page (this will trigger navigation)
+    const chartsNav = document.querySelector('[data-page="charts"]');
+    if (chartsNav) {
+        chartsNav.click();
+    }
+
+    // Load the chart after a brief delay to ensure page renders
+    setTimeout(() => {
+        if (symbol) {
+            loadChartForSymbol(symbol);
+        }
+    }, 100);
+}
+
+// Expose Charts page functions globally
+window.loadChartForSymbol = loadChartForSymbol;
+window.changeChartTimeframe = changeChartTimeframe;
+window.navigateToCharts = navigateToCharts;

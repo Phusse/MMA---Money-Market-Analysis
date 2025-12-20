@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     telegram_enabled BOOLEAN DEFAULT FALSE,
     telegram_chat_id VARCHAR(100),
     telegram_bot_token VARCHAR(255),
+    phone_number VARCHAR(20),  -- Optional phone for SMS alerts
     email_reports BOOLEAN DEFAULT TRUE,
     report_frequency VARCHAR(20) DEFAULT 'daily' CHECK (report_frequency IN ('daily', 'weekly', 'none')),
     

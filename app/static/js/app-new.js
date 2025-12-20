@@ -2297,35 +2297,215 @@ window.closeModal = closeModal;
 // ============================================
 // Settings Page Functions
 // ============================================
-async function testTelegram() {
-    showToast('Sending test message...', 'success');
+
+// Telegram Connection State
+let telegramDeepLink = null;
+
+async function checkTelegramStatus() {
+    if (!accessToken) return;
 
     try {
-        const response = await fetch('/api/telegram/test', { method: 'POST' });
+        const response = await fetch('/api/telegram/status', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            updateTelegramUI(data.is_connected);
+
+            // If not connected, generate QR code
+            if (!data.is_connected) {
+                generateTelegramQR();
+            }
+        }
+    } catch (error) {
+        console.error('Check telegram status error:', error);
+    }
+}
+
+function updateTelegramUI(isConnected) {
+    const statusBadge = document.getElementById('telegramConnectionStatus');
+    const connectSection = document.getElementById('telegramConnectSection');
+    const connectedSection = document.getElementById('telegramConnectedSection');
+
+    if (isConnected) {
+        statusBadge.textContent = 'Connected';
+        statusBadge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400';
+        connectSection?.classList.add('hidden');
+        connectedSection?.classList.remove('hidden');
+    } else {
+        statusBadge.textContent = 'Not Connected';
+        statusBadge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-slate-500/20 text-slate-400';
+        connectSection?.classList.remove('hidden');
+        connectedSection?.classList.add('hidden');
+    }
+}
+
+async function generateTelegramQR() {
+    if (!accessToken) {
+        // Show login prompt in QR area
+        const qrContainer = document.getElementById('telegramQRCode');
+        if (qrContainer) {
+            qrContainer.innerHTML = '<span class="text-slate-500 text-xs text-center">Login to connect</span>';
+        }
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/telegram/connect', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            telegramDeepLink = data.deep_link;
+
+            // Generate QR code using qrcode-generator library
+            const qrContainer = document.getElementById('telegramQRCode');
+            if (qrContainer && typeof qrcode !== 'undefined') {
+                const qr = qrcode(0, 'M');
+                qr.addData(data.deep_link);
+                qr.make();
+
+                // Create QR image
+                qrContainer.innerHTML = qr.createImgTag(3, 0);
+                qrContainer.querySelector('img').style.borderRadius = '4px';
+            }
+
+            // Update status if already connected
+            if (data.is_connected) {
+                updateTelegramUI(true);
+            }
+        } else if (response.status === 503) {
+            // Telegram not configured
+            const qrContainer = document.getElementById('telegramQRCode');
+            if (qrContainer) {
+                qrContainer.innerHTML = '<span class="text-slate-500 text-xs text-center">Bot not configured</span>';
+            }
+        }
+    } catch (error) {
+        console.error('Generate QR error:', error);
+    }
+}
+
+async function connectTelegram() {
+    if (!accessToken) {
+        showToast('Please login to connect Telegram', 'error');
+        showLoginModal();
+        return;
+    }
+
+    if (telegramDeepLink) {
+        // Open the deep link in a new tab
+        window.open(telegramDeepLink, '_blank');
+        showToast('Opening Telegram... Click "Start" in the bot!', 'info');
+
+        // Start polling for connection status
+        let attempts = 0;
+        const checkInterval = setInterval(async () => {
+            attempts++;
+            try {
+                const response = await fetch('/api/telegram/status', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.is_connected) {
+                        clearInterval(checkInterval);
+                        updateTelegramUI(true);
+                        showToast('Telegram connected successfully!', 'success');
+                    }
+                }
+            } catch (e) {
+                console.error('Polling error:', e);
+            }
+
+            // Stop polling after 60 seconds
+            if (attempts > 30) {
+                clearInterval(checkInterval);
+            }
+        }, 2000);
+    } else {
+        // Try to get a new deep link
+        await generateTelegramQR();
+        if (telegramDeepLink) {
+            window.open(telegramDeepLink, '_blank');
+        } else {
+            showToast('Could not generate Telegram link. Is the bot configured?', 'error');
+        }
+    }
+}
+
+async function testTelegram() {
+    showToast('Sending test message...', 'info');
+
+    try {
+        const response = await fetch('/api/telegram/test', {
+            method: 'POST',
+            headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}
+        });
         const data = await response.json();
 
         if (data.success) {
             showToast('Test message sent! Check your Telegram.', 'success');
         } else {
-            throw new Error(data.message);
+            throw new Error(data.message || 'Failed to send');
         }
     } catch (error) {
-        showToast('Failed to send test message', 'error');
+        showToast('Failed to send test message: ' + error.message, 'error');
+    }
+}
+
+async function disconnectTelegram() {
+    if (!accessToken) return;
+
+    try {
+        // Update preferences to clear telegram_chat_id
+        const response = await fetch('/api/user/preferences', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                telegram_enabled: false,
+                telegram_chat_id: null
+            })
+        });
+
+        if (response.ok) {
+            updateTelegramUI(false);
+            generateTelegramQR();
+            showToast('Telegram disconnected', 'success');
+        }
+    } catch (error) {
+        showToast('Failed to disconnect Telegram', 'error');
     }
 }
 
 function saveEmailSettings() {
-    const email = document.getElementById('recipientEmail').value;
-    const dailyReports = document.getElementById('dailyReportToggle').checked;
+    const email = document.getElementById('recipientEmail')?.value;
+    const dailyReports = document.getElementById('dailyReportToggle')?.checked;
 
     // Save to localStorage for now
-    localStorage.setItem('recipientEmail', email);
-    localStorage.setItem('dailyReports', dailyReports);
+    if (email) localStorage.setItem('recipientEmail', email);
+    if (dailyReports !== undefined) localStorage.setItem('dailyReports', dailyReports);
 
     showToast('Settings saved!', 'success');
 }
 
+// Initialize Telegram status when settings page loads
+document.addEventListener('DOMContentLoaded', () => {
+    // Check telegram status when user is logged in
+    if (accessToken) {
+        setTimeout(checkTelegramStatus, 1000);
+    }
+});
+
 window.testTelegram = testTelegram;
+window.connectTelegram = connectTelegram;
+window.disconnectTelegram = disconnectTelegram;
+window.checkTelegramStatus = checkTelegramStatus;
 window.saveEmailSettings = saveEmailSettings;
 
 // ============================================
@@ -3138,12 +3318,28 @@ function updateUIForLoggedInUser() {
     if (currentUser) {
         const userName = document.getElementById('userName');
         const userEmail = document.getElementById('userEmail');
-        const userAvatar = document.getElementById('userAvatar');
+        const userAvatarInitial = document.getElementById('userAvatarInitial');
+        const userAvatarImage = document.getElementById('userAvatarImage');
         const userPlan = document.getElementById('userPlan');
 
         if (userName) userName.textContent = currentUser.name || 'User';
         if (userEmail) userEmail.textContent = currentUser.email || '';
-        if (userAvatar) userAvatar.textContent = (currentUser.name || currentUser.email || 'U')[0].toUpperCase();
+
+        // Handle avatar - show image if available, otherwise show initial
+        if (currentUser.avatar_url) {
+            if (userAvatarImage) {
+                userAvatarImage.src = currentUser.avatar_url;
+                userAvatarImage.classList.remove('hidden');
+            }
+            if (userAvatarInitial) userAvatarInitial.classList.add('hidden');
+        } else {
+            if (userAvatarImage) userAvatarImage.classList.add('hidden');
+            if (userAvatarInitial) {
+                userAvatarInitial.classList.remove('hidden');
+                userAvatarInitial.textContent = (currentUser.name || currentUser.email || 'U')[0].toUpperCase();
+            }
+        }
+
         if (userPlan) {
             const plan = currentUser.plan || 'free';
             userPlan.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`;
@@ -3176,15 +3372,16 @@ async function loadUserProfile() {
 
                 // Update UI directly
                 const userName = document.getElementById('userName');
-                const userAvatar = document.getElementById('userAvatar');
                 const userPlan = document.getElementById('userPlan');
 
                 if (userName) userName.textContent = currentUser.name || currentUser.email?.split('@')[0] || 'User';
-                if (userAvatar) userAvatar.textContent = (currentUser.name || currentUser.email || 'U')[0].toUpperCase();
                 if (userPlan && currentUser.account_type) {
                     // Update account type badge if it changed
                     updateAccountTypeDisplay();
                 }
+
+                // Update avatar display
+                updateAvatarDisplay(currentUser.avatar_url);
             }
         }
     } catch (error) {
@@ -3559,6 +3756,255 @@ async function doUpdateProfile() {
         errorEl.classList.remove('hidden');
     }
 }
+
+// ============================================
+// Avatar Functions
+// ============================================
+let selectedAvatarUrl = null;
+
+function showAvatarModal() {
+    const modal = document.getElementById('avatarModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+
+        // Set current avatar in preview
+        const currentAvatarUrl = currentUser?.avatar_url;
+        if (currentAvatarUrl) {
+            previewAvatarUrl(currentAvatarUrl);
+        } else {
+            document.getElementById('avatarPreviewInitial').textContent =
+                (currentUser?.name || currentUser?.email || 'U')[0].toUpperCase();
+            document.getElementById('avatarPreviewImage').classList.add('hidden');
+            document.getElementById('avatarPreviewInitial').classList.remove('hidden');
+        }
+
+        // Generate avatar options
+        generateAvatarOptions();
+    }
+}
+
+function closeAvatarModal() {
+    const modal = document.getElementById('avatarModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        selectedAvatarUrl = null;
+    }
+}
+
+function previewAvatarUrl(url) {
+    const previewInitial = document.getElementById('avatarPreviewInitial');
+    const previewImage = document.getElementById('avatarPreviewImage');
+
+    if (url && url.trim()) {
+        selectedAvatarUrl = url.trim();
+        previewImage.src = selectedAvatarUrl;
+        previewImage.classList.remove('hidden');
+        previewInitial.classList.add('hidden');
+
+        // Handle image load error
+        previewImage.onerror = () => {
+            previewImage.classList.add('hidden');
+            previewInitial.classList.remove('hidden');
+            showToast('Could not load image from URL', 'error');
+        };
+    } else {
+        previewImage.classList.add('hidden');
+        previewInitial.classList.remove('hidden');
+        selectedAvatarUrl = null;
+    }
+}
+
+function generateAvatarOptions() {
+    const container = document.getElementById('avatarOptions');
+    if (!container) return;
+
+    // Use DiceBear API to generate different avatar styles
+    const seed = currentUser?.id || currentUser?.email || 'user';
+    const styles = ['avataaars', 'bottts', 'identicon', 'initials', 'pixel-art'];
+
+    container.innerHTML = styles.map((style, i) => {
+        const url = `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}${i}`;
+        return `
+            <button onclick="selectAvatar('${url}')" 
+                class="w-12 h-12 rounded-full bg-white overflow-hidden hover:ring-2 hover:ring-violet-500 transition-all">
+                <img src="${url}" alt="${style}" class="w-full h-full object-cover">
+            </button>
+        `;
+    }).join('');
+}
+
+function selectAvatar(url) {
+    selectedAvatarUrl = url;
+    previewAvatarUrl(url);
+}
+
+// File upload state
+let selectedAvatarFile = null;
+
+function handleAvatarFileSelect(event) {
+    const file = event.target.files[0];
+    if (file) {
+        processAvatarFile(file);
+    }
+}
+
+function handleAvatarDrop(event) {
+    event.preventDefault();
+    event.target.classList.remove('border-violet-500', 'bg-violet-500/10');
+
+    const file = event.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+        processAvatarFile(file);
+    } else {
+        showToast('Please drop an image file', 'error');
+    }
+}
+
+function processAvatarFile(file) {
+    // Validate size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+        showToast('Image must be smaller than 2MB', 'error');
+        return;
+    }
+
+    // Store file for upload
+    selectedAvatarFile = file;
+    selectedAvatarUrl = null;
+
+    // Preview using FileReader
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const previewInitial = document.getElementById('avatarPreviewInitial');
+        const previewImage = document.getElementById('avatarPreviewImage');
+
+        previewImage.src = e.target.result;
+        previewImage.classList.remove('hidden');
+        previewInitial.classList.add('hidden');
+    };
+    reader.readAsDataURL(file);
+
+    showToast('Image selected! Click Save to upload.', 'success');
+}
+
+async function saveAvatar() {
+    if (!accessToken) {
+        showToast('Please login first', 'error');
+        return;
+    }
+
+    try {
+        let avatarUrl = selectedAvatarUrl;
+
+        // If we have a file to upload, upload it first
+        if (selectedAvatarFile) {
+            showToast('Uploading image...', 'info');
+
+            const formData = new FormData();
+            formData.append('file', selectedAvatarFile);
+
+            const uploadResponse = await fetch('/api/user/avatar', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: formData
+            });
+
+            const uploadData = await uploadResponse.json();
+
+            if (!uploadResponse.ok) {
+                throw new Error(uploadData.detail || 'Upload failed');
+            }
+
+            avatarUrl = uploadData.avatar_url;
+            selectedAvatarFile = null;
+        } else if (avatarUrl) {
+            // Just updating with a URL (from style options)
+            const response = await fetch('/api/user/profile', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({ avatar_url: avatarUrl })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || 'Failed to update avatar');
+            }
+        } else {
+            showToast('Please select an image first', 'error');
+            return;
+        }
+
+        showToast('Avatar updated!', 'success');
+        closeAvatarModal();
+
+        // Update current user and UI
+        if (currentUser) currentUser.avatar_url = avatarUrl;
+        updateAvatarDisplay(avatarUrl);
+
+    } catch (error) {
+        console.error('Save avatar error:', error);
+        showToast(error.message || 'Connection error. Please try again.', 'error');
+    }
+}
+
+async function removeAvatar() {
+    if (!accessToken) return;
+
+    try {
+        const response = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ avatar_url: null })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            showToast('Avatar removed', 'success');
+            closeAvatarModal();
+
+            // Update current user and UI
+            if (currentUser) currentUser.avatar_url = null;
+            updateAvatarDisplay(null);
+        }
+    } catch (error) {
+        console.error('Remove avatar error:', error);
+        showToast('Connection error', 'error');
+    }
+}
+
+function updateAvatarDisplay(avatarUrl) {
+    const avatarInitial = document.getElementById('userAvatarInitial');
+    const avatarImage = document.getElementById('userAvatarImage');
+
+    if (avatarUrl) {
+        avatarImage.src = avatarUrl;
+        avatarImage.classList.remove('hidden');
+        avatarInitial?.classList.add('hidden');
+    } else {
+        avatarImage.classList.add('hidden');
+        avatarInitial?.classList.remove('hidden');
+        if (avatarInitial) {
+            avatarInitial.textContent = (currentUser?.name || currentUser?.email || 'U')[0].toUpperCase();
+        }
+    }
+}
+
+window.showAvatarModal = showAvatarModal;
+window.closeAvatarModal = closeAvatarModal;
+window.previewAvatarUrl = previewAvatarUrl;
+window.selectAvatar = selectAvatar;
+window.saveAvatar = saveAvatar;
+window.removeAvatar = removeAvatar;
+window.handleAvatarFileSelect = handleAvatarFileSelect;
+window.handleAvatarDrop = handleAvatarDrop;
 
 function setupTelegramToggle() {
     const toggle = document.getElementById('telegramEnabled');
